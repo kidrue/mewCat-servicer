@@ -1,0 +1,13 @@
+node_modules
+dist
+src/generated
+.git
+.env
+.env.*
+secrets
+data
+coverage
+.superpowers
+*.db
+*.db-*
+*.log
