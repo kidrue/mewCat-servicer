@@ -2,7 +2,7 @@
 
 适用：**Ubuntu 22.04 / 24.04 系统镜像**、单台服务器，Docker Compose + Nginx + HTTPS。其他系统（例如 Alibaba Cloud Linux）不能照抄 apt 命令。以下命令在服务器 SSH 终端运行，不是在本机 PowerShell 运行。建议至少 2 GB 内存用于本机构建；不需要在宿主机安装 Node.js。
 
-GitHub 仓库：`kidrue/mewCat-service`。私有仓库建议使用只读 Deploy key 拉取。
+GitHub 仓库：`kidrue/mewCat-servicer`。私有仓库建议使用只读 Deploy key 拉取。
 
 ## 1. 云端准备
 
@@ -58,7 +58,7 @@ cat /root/.ssh/mewcat_github.pub
 
 ```bash
 export GIT_SSH_COMMAND='ssh -i /root/.ssh/mewcat_github -o IdentitiesOnly=yes'
-git clone git@github.com:kidrue/mewCat-service.git /opt/mewCat-service
+git clone git@github.com:kidrue/mewCat-servicer.git /opt/mewCat-service
 cd /opt/mewCat-service
 ```
 
