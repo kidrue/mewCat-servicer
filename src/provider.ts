@@ -14,6 +14,9 @@ const systemPrompt = 'You are a translation engine. Translate each item in texts
   + 'Preserve meaning, whitespace, formatting, code, placeholders and URLs. Return only a JSON object {"translations":["..."]} with exactly one string for every input, in the same order. Do not add explanations.';
 
 export function createProvider(settings: ProviderSettings, fetcher: Fetch = fetch) {
+  const thinkingOption = new URL(settings.baseUrl).hostname === 'api.deepseek.com'
+    ? { thinking: { type: 'disabled' } }
+    : { enable_thinking: false };
   return {
     async translate(data: TranslationInput): Promise<TranslationResult> {
       const controller = new AbortController();
@@ -23,7 +26,7 @@ export function createProvider(settings: ProviderSettings, fetcher: Fetch = fetc
           method: 'POST', redirect: 'error', signal: controller.signal,
           headers: { Authorization: `Bearer ${settings.apiKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: settings.model, stream: false, temperature: 0.1,
-            max_tokens: settings.maxTokens, enable_thinking: false, response_format: { type: 'json_object' },
+            max_tokens: settings.maxTokens, ...thinkingOption, response_format: { type: 'json_object' },
             messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: JSON.stringify(data) }],
           }),
         });

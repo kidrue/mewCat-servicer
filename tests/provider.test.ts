@@ -21,6 +21,19 @@ describe('硅基流动接口边界', () => {
     ]);
   });
 
+  it('DeepSeek 官方接口使用其非思考参数', async () => {
+    let sent: Record<string, unknown> | undefined;
+    const provider = createProvider({ ...settings, baseUrl: 'https://api.deepseek.com' }, async (_url, init) => {
+      sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return Response.json({ choices: [{ message: { content: '{"translations":["你好","世界"]}' }, finish_reason: 'stop' }] });
+    });
+
+    await provider.translate(request);
+
+    expect(sent).toMatchObject({ thinking: { type: 'disabled' } });
+    expect(sent).not.toHaveProperty('enable_thinking');
+  });
+
   it.each([
     { choices: [{ message: { content: '{"translations":["你好"]}' }, finish_reason: 'stop' }] },
     { choices: [{ message: { content: '```not json```' }, finish_reason: 'stop' }] },

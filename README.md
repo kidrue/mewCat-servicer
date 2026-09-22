@@ -107,7 +107,7 @@ export async function translate(texts, targetLanguage) {
 
 每次 1–20 段，合计不超过 5000 个 JavaScript 字符单元（UTF-16），拒绝纯空白。语言参数使用 `en`、`ja`、`zh-CN` 等语言标签；sourceLanguage 默认 auto。返回数组与输入顺序一致。长页面建议按 500–1000 字符拆批；模型输出截断或数量不符会明确失败。
 
-服务器固定模型、系统提示词、上游地址和输出上限，禁止客户端传入 `model`、`messages` 或 API Key。使用硅基流动 `/v1/chat/completions`，非流式 JSON 输出，关闭思考模式。选择支持这些能力的模型，参考[官方接口文档](https://docs.siliconflow.cn/docs/api/chat-completions-post)。
+服务器固定模型、系统提示词、上游地址和输出上限，禁止客户端传入 `model`、`messages` 或 API Key。使用 OpenAI 兼容的 `/chat/completions`，非流式 JSON 输出，关闭思考模式。默认配置为硅基流动；也支持 DeepSeek 官方接口，将 `SILICONFLOW_BASE_URL` 设为 `https://api.deepseek.com` 并使用当前有效的 DeepSeek 模型 ID。
 
 ## 防滥用与默认限额
 
