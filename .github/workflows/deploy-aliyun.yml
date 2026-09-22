@@ -1,0 +1,78 @@
+name: 部署到阿里云
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 串行部署，避免中断正在执行的数据库迁移。
+concurrency:
+  group: aliyun-production
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: production
+    env:
+      DEPLOY_HOST: ${{ secrets.ALIYUN_HOST }}
+      DEPLOY_USER: ${{ secrets.ALIYUN_USER }}
+      DEPLOY_PORT: ${{ vars.ALIYUN_SSH_PORT || '22' }}
+      DEPLOY_PATH: ${{ vars.ALIYUN_DEPLOY_PATH || '/opt/mewCat-service' }}
+      COMPOSE_PROJECT: ${{ vars.ALIYUN_COMPOSE_PROJECT || 'mewcat-service' }}
+      IMAGE_PLATFORM: ${{ vars.ALIYUN_PLATFORM || 'linux/amd64' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: 安装依赖并验证
+        run: |
+          npx --yes npm@11 ci
+          npm run typecheck
+          npm test
+          npm run build
+          npm run smoke
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: 构建应用及迁移镜像
+        run: |
+          docker buildx build --platform "$IMAGE_PLATFORM" --target tools --load -t "mewcat-tools:$GITHUB_SHA" .
+          docker buildx build --platform "$IMAGE_PLATFORM" --target runtime --load -t "mewcat-api:$GITHUB_SHA" .
+          mkdir -p bundle
+          docker save "mewcat-tools:$GITHUB_SHA" "mewcat-api:$GITHUB_SHA" | gzip > bundle/images.tar.gz
+          cp compose.yaml deploy/compose.images.yaml deploy/deploy.sh bundle/
+      - name: 配置 SSH 并检查部署参数
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ALIYUN_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.ALIYUN_SSH_KNOWN_HOSTS }}
+        run: |
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$DEPLOY_PORT" =~ ^[0-9]+$ ]]
+          [[ "$DEPLOY_PATH" =~ ^/[a-zA-Z0-9_/-]+$ && "$DEPLOY_PATH" != / ]]
+          [[ "$COMPOSE_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]]
+          test -n "$SSH_PRIVATE_KEY"
+          test -n "$SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: 上传镜像并部署
+        run: |
+          remote="$DEPLOY_USER@$DEPLOY_HOST"
+          incoming="/tmp/mewcat-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          ssh_opts=(-p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
+          ssh "${ssh_opts[@]}" "$remote" "umask 077; mkdir '$incoming'"
+          tar -C bundle -czf - . | ssh "${ssh_opts[@]}" "$remote" "tar -xzf - -C '$incoming'"
+          ssh "${ssh_opts[@]}" "$remote" "bash '$incoming/deploy.sh' '$DEPLOY_PATH' '$COMPOSE_PROJECT' '$GITHUB_SHA' '$incoming'"
+      - name: 清理 Runner SSH 私钥
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519

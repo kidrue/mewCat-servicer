@@ -8,6 +8,8 @@ secrets
 data
 coverage
 .superpowers
+.deploy
+.deploy.lock
 *.db
 *.db-*
 *.log

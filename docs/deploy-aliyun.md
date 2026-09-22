@@ -157,6 +157,8 @@ docker compose run --rm migrate node dist/scripts/admin.js revoke 实际clientId
 
 ## 8. 更新代码
 
+需要每次推送 `main` 后自动部署镜像，请使用 [GitHub Actions 自动部署](github-actions-deploy.md)。启用后日常管理使用该文档中的发布配置，不再执行下面的源码构建更新命令。
+
 先执行下一节备份，然后：
 
 ```bash

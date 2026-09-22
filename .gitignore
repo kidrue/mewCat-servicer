@@ -12,3 +12,5 @@ src/generated/
 .superpowers/
 *.log
 .worktrees/
+.deploy/
+.deploy.lock

@@ -4,6 +4,8 @@
 
 阿里云轻量服务器请直接参照 [Ubuntu 部署命令](docs/deploy-aliyun.md)，包含私有仓库拉取、容器部署、Nginx、HTTPS、更新和备份。
 
+推送到 `main` 自动构建镜像并部署，请参照 [GitHub Actions 自动部署](docs/github-actions-deploy.md) 配置服务器和 GitHub Secrets。
+
 ## 快速启动
 
 需要 Node.js **22.12+**（推荐 Node 22 最新补丁版）和 npm 11。仓库内不包含硅基流动 API Key；模型须在控制台选择。未提供真实凭证的验证使用本地模拟供应商，不会产生 API 费用。
