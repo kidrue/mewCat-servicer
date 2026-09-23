@@ -83,6 +83,8 @@ ALLOWED_ORIGINS=chrome-extension://dbginmjacelgagkfhjkhcbajnaalolfp
 MAX_CONCURRENT_REQUESTS=4
 ```
 
+Compose 在 `ALLOWED_ORIGINS` 未设置或为空时也会使用上述正式扩展 Origin；显式配置时以 `.env` 为准，多个来源使用逗号分隔。
+
 建议选择支持 JSON 输出及非思考模式的文本模型。其余限额按预算调整。先构建，再使用工具容器在服务器本地生成密钥，不需要把开发机私钥上传：
 
 ```bash
