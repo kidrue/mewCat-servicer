@@ -139,15 +139,14 @@ curl --fail "https://$MEWCAT_DOMAIN/health"
 
 Certbot 会申请证书并修改 Nginx 配置，参见 [Certbot Nginx 指南](https://certbot.eff.org/instructions?os=pip&ws=nginx)。服务器已有其他安装方式的 Certbot 时使用现有版本，不混用安装方式。浏览器扩展的远程服务地址必须使用 HTTPS。
 
-## 7. 生成邀请码并接入扩展
+## 7. 接入扩展并管理设备
 
 ```bash
 cd /opt/mewCat-service
-docker compose run --rm migrate node dist/scripts/admin.js invite 24
 docker compose run --rm migrate node dist/scripts/admin.js clients
 ```
 
-邀请码仅给授权使用者。扩展配置服务地址 `https://你的域名`，使用邀请码首次注册；配置对应 host_permissions，并使用服务器签名公钥指纹。接入代码见 [README](../README.md#chrome-扩展接入)。
+扩展配置服务地址 `https://你的域名` 后会按设备密钥自动注册；配置对应 host_permissions，并使用服务器签名公钥指纹。公网部署应保留注册 IP 日限额。接入代码见 [README](../README.md#chrome-扩展接入)。
 
 撤销某个设备：
 

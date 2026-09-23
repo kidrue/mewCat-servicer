@@ -26,10 +26,10 @@ const client = await TranslationClient.connect({
   pinnedSigningThumbprint: '<RFC-7638-SHA-256-thumbprint>',
 });
 
-// 首次使用时执行一次。邀请码由服务端管理员生成。
+// 首次使用时自动注册当前设备身份。
 if (!saved?.clientId) {
   await saveClientState(serviceOrigin, client.getState());
-  await client.register('<invitation>', 'mewCat Chrome Extension');
+  await client.register('mewCat Chrome Extension');
   await saveClientState(serviceOrigin, client.getState());
 }
 
@@ -52,7 +52,7 @@ console.log(usage);
 | --- | --- | --- | --- | --- |
 | `GET` | `/health` | 否 | `200` | 检查服务及数据库状态 |
 | `GET` | `/v1/keys` | 否 | `200` | 获取服务器协议版本和公钥 |
-| `POST` | `/v1/clients/register` | 是 | `201` | 使用邀请码注册客户端身份 |
+| `POST` | `/v1/clients/register` | 是 | `201` | 注册客户端设备身份 |
 | `POST` | `/v1/translate` | 是 | `200` | 批量翻译文本 |
 | `POST` | `/v1/usage` | 是 | `200` | 查询当前客户端当日字符用量 |
 
@@ -210,13 +210,12 @@ HTTP `200` 响应结构：
 
 ## `POST /v1/clients/register`
 
-使用一次性邀请码注册设备公钥，并证明客户端持有对应签名私钥。注册请求的 JWS `kid` 固定为 `registration`。
+注册设备公钥，并证明客户端持有对应签名私钥。注册请求的 JWS `kid` 固定为 `registration`。服务端通过每 IP 每日注册限额控制滥用。
 
 加密前的 `data`：
 
 ```json
 {
-  "invitation": "43位base64url邀请码",
   "name": "mewCat Chrome Extension",
   "signingKey": {
     "kty": "EC",
@@ -234,7 +233,6 @@ HTTP `200` 响应结构：
 
 | 字段 | 约束 |
 | --- | --- |
-| `invitation` | 43 位 base64url，一次性邀请码 |
 | `name` | 去除首尾空白后 1–80 个字符 |
 | `signingKey` | EC P-256 公钥，只允许 `kty`、`crv`、`x`、`y` |
 | `encryptionKey` | RSA 2048/3072/4096 位公钥，指数固定为 65537 |
@@ -247,7 +245,7 @@ HTTP `201`，解密后的 `data`：
 }
 ```
 
-同一签名密钥、加密密钥和原邀请码可以恢复因网络中断而丢失的注册响应。已撤销客户端不能恢复。
+同一签名密钥和加密密钥可以恢复因网络中断而丢失的注册响应。加密密钥发生变化或客户端已撤销时不能恢复。
 
 ## `POST /v1/translate`
 
@@ -314,7 +312,6 @@ HTTP `200`，解密后的 `data`：
 | `400` | `INVALID_REQUEST` | JSON、信封或业务参数格式错误，或 POST 带查询参数 |
 | `401` | `UNAUTHORIZED` | 解密、签名、客户端身份、路径绑定或时间窗口校验失败 |
 | `403` | `ORIGIN_NOT_ALLOWED` | 浏览器 Origin 不在允许列表 |
-| `403` | `INVALID_INVITATION` | 邀请码无效、过期或已使用 |
 | `403` | `CLIENT_REVOKED` | 客户端已被管理员撤销 |
 | `404` | `NOT_FOUND` | 接口不存在 |
 | `409` | `CLIENT_EXISTS` | 相同签名密钥已绑定其他注册信息 |
@@ -363,4 +360,3 @@ class TranslationError extends Error {
 连接阶段无法取得服务器公钥时使用 `KEYS_UNAVAILABLE`。未认证阶段收到明文 HTTP 错误时，SDK 使用 `REQUEST_REJECTED`；已经解密的业务错误保留服务端 `code`。
 
 网络超时、协议签名不匹配、公钥指纹变化、响应关联校验失败等情况可能抛出普通 `Error`，调用端应将其视为不可自动重试的连接或安全错误。
-

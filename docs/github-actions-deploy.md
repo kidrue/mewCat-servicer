@@ -85,7 +85,7 @@ dc=(docker compose --project-directory "$PWD" -p mewcat-service \
   -f .deploy/current/compose.yaml -f .deploy/current/compose.images.yaml)
 "${dc[@]}" ps
 "${dc[@]}" logs --tail=100 api
-"${dc[@]}" run --rm --no-deps --pull never migrate node dist/scripts/admin.js invite 24
+"${dc[@]}" run --rm --no-deps --pull never migrate node dist/scripts/admin.js clients
 ```
 
 停止 API 后才复制完整 SQLite 目录，包含可能存在的 WAL 文件。备份也包含 `.env` 和 `secrets`，需限制访问，并定期复制到服务器外的安全存储。每次更新会有短暂停机。

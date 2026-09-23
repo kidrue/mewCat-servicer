@@ -31,9 +31,6 @@ try {
   const original = await readFile(environment.KEYS_FILE, 'utf8');
   await command([resolve('dist/scripts/admin.js'), 'keys'], 1);
   assert.equal(await readFile(environment.KEYS_FILE, 'utf8'), original, 'Existing keys must not be overwritten');
-  const invitation = (await command([resolve('dist/scripts/admin.js'), 'invite', '1'])).trim();
-  assert.match(invitation, /^[A-Za-z0-9_-]{43}$/);
-  await command([resolve('dist/scripts/admin.js'), 'invite', '0'], 1);
   await command([resolve('dist/scripts/admin.js'), 'clients']);
   await command([resolve('dist/scripts/admin.js'), 'cleanup']);
 
@@ -60,12 +57,12 @@ try {
   // 使用真正构建出的客户端通过本地 TCP 请求完成注册和用量查询。
   const { TranslationClient } = await import('../dist/client/index.js');
   const client = await TranslationClient.connect({ baseUrl });
-  const clientId = await client.register(invitation, 'smoke-extension');
+  const clientId = await client.register('smoke-extension');
   assert.match(clientId, /^[0-9a-f-]{36}$/);
   assert.equal((await client.usage()).usedCharacters, 0);
   await command([resolve('dist/scripts/admin.js'), 'revoke', clientId]);
   await assert.rejects(client.usage(), (error) => error.code === 'CLIENT_REVOKED');
-  console.log('Smoke passed: relative database URL, migrations, key protection, invitation CLI, compiled server, TCP registration/usage/revocation. No paid API called.');
+  console.log('Smoke passed: relative database URL, migrations, key protection, compiled server, TCP registration/usage/revocation. No paid API called.');
 } finally {
   if (service && service.exitCode === null) {
     const exited = once(service, 'exit');

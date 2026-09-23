@@ -11,7 +11,7 @@ import { ensureDatabaseDirectory } from '../src/database-path.js';
 async function main() {
   const [command, argument] = process.argv.slice(2);
   if (!command || command === 'help') {
-    console.log('命令：keys | invite [有效小时数=24] | clients | revoke <clientId> | cleanup');
+    console.log('命令：keys | clients | revoke <clientId> | cleanup');
     return;
   }
   if (command === 'keys') {
@@ -24,18 +24,12 @@ async function main() {
     console.log(`密钥已保存：${path}\n服务器签名公钥指纹：${await calculateJwkThumbprint(keys.signingKey)}`);
     return;
   }
-  if (!['invite', 'clients', 'revoke', 'cleanup'].includes(command)) throw new Error('未知命令，请运行 npm run admin -- help');
+  if (!['clients', 'revoke', 'cleanup'].includes(command)) throw new Error('未知命令，请运行 npm run admin -- help');
   const databaseUrl = process.env.DATABASE_URL ?? 'file:./data/mewcat.db';
   await ensureDatabaseDirectory(databaseUrl);
   const store = createStore(databaseUrl);
   try {
     switch (command) {
-      case 'invite': {
-        const hours = Number(argument ?? '24');
-        if (!Number.isInteger(hours) || hours < 1 || hours > 720) throw new Error('有效小时数必须为 1 至 720 的整数');
-        console.log(await store.issueInvitation(hours * 3600));
-        break;
-      }
       case 'clients':
         console.table(await store.db.client.findMany({ select: { id: true, name: true, createdAt: true, revokedAt: true }, orderBy: { createdAt: 'desc' }, take: 100 }));
         break;
