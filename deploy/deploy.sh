@@ -46,5 +46,11 @@ trap on_error ERR
 "${compose[@]}" up -d --no-deps --no-build --wait --wait-timeout 120 api
 # 只有健康检查通过才更新成功发布指针。
 ln -sfn "$release" .deploy/current
-rm -f "$incoming/images.tar.gz"
+rm -f \
+  "$incoming/images.tar.gz" \
+  "$incoming"/images.tar.gz.part-* \
+  "$incoming/compose.yaml" \
+  "$incoming/compose.images.yaml" \
+  "$incoming/deploy.sh"
+rmdir "$incoming" || true
 echo "部署成功：$MEWCAT_IMAGE_TAG；备份：$backup"
