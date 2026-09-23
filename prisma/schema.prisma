@@ -10,23 +10,15 @@ datasource db {
 }
 
 model Client {
-  id             String   @id @default(uuid())
-  name           String
-  signingKey     String
-  encryptionKey  String
-  keyThumbprint  String   @unique
-  registrationTokenHash String @unique
-  createdAt      DateTime @default(now())
-  revokedAt      DateTime?
-  nonces         Nonce[]
-  requests       TranslationRequest[]
-}
-
-model Invitation {
-  tokenHash String   @id
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-  usedAt    DateTime?
+  id            String   @id @default(uuid())
+  name          String
+  signingKey    String
+  encryptionKey String
+  keyThumbprint String   @unique
+  createdAt     DateTime @default(now())
+  revokedAt     DateTime?
+  nonces        Nonce[]
+  requests      TranslationRequest[]
 }
 
 model Nonce {

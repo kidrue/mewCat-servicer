@@ -1,11 +1,9 @@
-import { createHash, randomBytes } from 'node:crypto';
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 import { calculateJwkThumbprint, type JWK } from 'jose';
 import { PrismaClient, Prisma } from './generated/prisma/client.js';
 import { ApiError } from './errors.js';
 
 export interface Bucket { key: string; amount: number; limit: number; expiresAt: Date }
-export const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 type Tx = Prisma.TransactionClient;
 
 async function consume(tx: Tx, buckets: Bucket[]) {
@@ -38,27 +36,17 @@ export class Store {
     this.writes = result.catch(() => undefined);
     return result;
   }
-  async issueInvitation(ttlSeconds: number, now = Date.now()): Promise<string> {
-    if (!Number.isSafeInteger(ttlSeconds) || ttlSeconds < 1 || ttlSeconds > 30 * 86_400) throw new Error('邀请码有效期应为 1 秒至 30 天');
-    const token = randomBytes(32).toString('base64url');
-    await this.atomic((tx) => tx.invitation.create({ data: { tokenHash: hashToken(token), expiresAt: new Date(now + ttlSeconds * 1000) } }));
-    return token;
-  }
-  async registerClient(token: string, name: string, signing: JWK, encryption: JWK) {
+  async registerClient(name: string, signing: JWK, encryption: JWK) {
     const keyThumbprint = await calculateJwkThumbprint(signing);
     try {
       return await this.atomic(async (tx) => {
-        const tokenHash = hashToken(token);
         const existing = await tx.client.findUnique({ where: { keyThumbprint } });
         if (existing) {
           if (existing.revokedAt) throw new ApiError(403, 'CLIENT_REVOKED', '客户端已被停用');
-          if (existing.registrationTokenHash === tokenHash && await calculateJwkThumbprint(JSON.parse(existing.encryptionKey)) === await calculateJwkThumbprint(encryption)) return existing;
-          throw new ApiError(409, 'CLIENT_EXISTS', '该设备密钥已注册，请使用原邀请码和密钥恢复');
+          if (await calculateJwkThumbprint(JSON.parse(existing.encryptionKey)) === await calculateJwkThumbprint(encryption)) return existing;
+          throw new ApiError(409, 'CLIENT_EXISTS', '该设备密钥已注册，但响应公钥不匹配');
         }
-        const now = new Date();
-        const claim = await tx.invitation.updateMany({ where: { tokenHash, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } });
-        if (claim.count !== 1) throw new ApiError(403, 'INVALID_INVITATION', '邀请码无效、过期或已使用');
-        return tx.client.create({ data: { name, signingKey: JSON.stringify(signing), encryptionKey: JSON.stringify(encryption), keyThumbprint, registrationTokenHash: tokenHash } });
+        return tx.client.create({ data: { name, signingKey: JSON.stringify(signing), encryptionKey: JSON.stringify(encryption), keyThumbprint } });
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ApiError(409, 'CLIENT_EXISTS', '该设备密钥已注册');
@@ -95,7 +83,6 @@ export class Store {
     return this.atomic(async (tx) => ({
       nonces: (await tx.nonce.deleteMany({ where: { expiresAt: { lt: new Date(now) } } })).count,
       buckets: (await tx.usageBucket.deleteMany({ where: { expiresAt: { lt: new Date(now) } } })).count,
-      invitations: (await tx.invitation.deleteMany({ where: { expiresAt: { lt: new Date(now) } } })).count,
       requests: (await tx.translationRequest.deleteMany({ where: { createdAt: { lt: new Date(now - retentionDays * 86_400_000) } } })).count,
     }));
   }

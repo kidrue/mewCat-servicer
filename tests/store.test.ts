@@ -1,8 +1,9 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createStore, type Store } from '../src/store.js';
+import { applyMigrations } from './helpers.js';
 
 describe('持久化防滥用', () => {
   let store: Store;
@@ -10,10 +11,7 @@ describe('持久化防滥用', () => {
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'mewcat-store-'));
     store = createStore(`file:${join(directory, 'test.db').replaceAll('\\', '/')}`);
-    const sql = await readFile(resolve('prisma/migrations/20260920000000_init/migration.sql'), 'utf8');
-    for (const statement of sql.split(';').filter((part) => part.trim())) {
-      await store.db.$executeRawUnsafe(statement);
-    }
+    await applyMigrations(store);
   });
   afterEach(async () => {
     await store?.db.$disconnect();
@@ -21,36 +19,63 @@ describe('持久化防滥用', () => {
   });
 
   async function register() {
-    const token = await store.issueInvitation(3600);
-    return store.registerClient(token, '测试扩展', { kty: 'EC', crv: 'P-256', x: crypto.randomUUID(), y: 'test' }, { kty: 'RSA', n: 'test', e: 'AQAB' });
+    return store.registerClient('测试扩展', { kty: 'EC', crv: 'P-256', x: crypto.randomUUID(), y: 'test' }, { kty: 'RSA', n: 'test', e: 'AQAB' });
   }
 
-  it('一次性邀请码的并发注册只能成功一次，数据库不保存邀请码原文', async () => {
-    const token = await store.issueInvitation(3600);
-    const attempts = await Promise.allSettled([1, 2].map((index) => store.registerClient(token, 'extension', { kty: 'EC', crv: 'P-256', x: `device-${index}`, y: 'test' }, { kty: 'RSA', n: 'test', e: 'AQAB' })));
-    expect(attempts.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-    expect(await store.db.client.count()).toBe(1);
-    expect(JSON.stringify(await store.db.invitation.findMany())).not.toContain(token);
-  });
-
-  it('响应丢失后，持有原密钥和邀请码的设备可找回 ID，不能换响应公钥或恢复已撤销身份', async () => {
-    const token = await store.issueInvitation(3600);
+  it('相同设备可找回 ID，不能换响应公钥或恢复已撤销身份', async () => {
     const signing = { kty: 'EC', crv: 'P-256', x: 'x', y: 'y' };
     const encryption = { kty: 'RSA', n: 'n', e: 'AQAB' };
-    const registered = await store.registerClient(token, 'extension', signing, encryption);
-    expect((await store.registerClient(token, 'extension', signing, encryption)).id).toBe(registered.id);
+    const registered = await store.registerClient('extension', signing, encryption);
+    expect((await store.registerClient('extension', signing, encryption)).id).toBe(registered.id);
     expect(await store.db.client.count()).toBe(1);
-    await expect(store.registerClient(token, 'extension', signing, { ...encryption, n: 'different' })).rejects.toMatchObject({ code: 'CLIENT_EXISTS' });
+    await expect(store.registerClient('extension', signing, { ...encryption, n: 'different' })).rejects.toMatchObject({ code: 'CLIENT_EXISTS' });
     await store.revokeClient(registered.id);
-    await expect(store.registerClient(token, 'extension', signing, encryption)).rejects.toMatchObject({ code: 'CLIENT_REVOKED' });
+    await expect(store.registerClient('extension', signing, encryption)).rejects.toMatchObject({ code: 'CLIENT_REVOKED' });
   });
 
-  it('拒绝过期邀请码，拒绝已撤销设备的请求', async () => {
-    const token = await store.issueInvitation(3600, 1_000);
-    await expect(store.registerClient(token, 'old', { kty: 'EC', crv: 'P-256', x: 'x', y: 'y' }, { kty: 'RSA', n: 'n', e: 'AQAB' })).rejects.toMatchObject({ code: 'INVALID_INVITATION' });
+  it('拒绝已撤销设备的请求', async () => {
     const client = await register();
     await store.revokeClient(client.id);
     await expect(store.consumeNonce(client.id, crypto.randomUUID(), Date.now() + 600_000)).rejects.toMatchObject({ code: 'CLIENT_REVOKED' });
+  });
+
+  it('迁移删除邀请码结构并保留已有客户端', async () => {
+    const legacyDirectory = await mkdtemp(join(tmpdir(), 'mewcat-migration-'));
+    const legacyStore = createStore(`file:${join(legacyDirectory, 'test.db').replaceAll('\\', '/')}`);
+    const clientId = crypto.randomUUID();
+    try {
+      await applyMigrations(legacyStore, ['20260920000000_init']);
+      await legacyStore.db.$executeRawUnsafe(
+        `INSERT INTO "Client" ("id", "name", "signingKey", "encryptionKey", "keyThumbprint", "registrationTokenHash", "revokedAt") VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        clientId,
+        'existing',
+        '{"kty":"EC"}',
+        '{"kty":"RSA"}',
+        'signing-thumbprint',
+        'legacy-token-hash',
+        '2026-09-22T00:00:00.000Z',
+      );
+      await legacyStore.db.$executeRawUnsafe(
+        `INSERT INTO "Invitation" ("tokenHash", "expiresAt") VALUES (?, ?)`,
+        'unused-invitation',
+        '2026-09-24T00:00:00.000Z',
+      );
+      await applyMigrations(legacyStore, ['20260923000000_remove_invitations']);
+
+      const clients = await legacyStore.db.$queryRawUnsafe<Array<{ id: string; name: string; revokedAt: Date }>>(
+        `SELECT "id", "name", "revokedAt" FROM "Client"`,
+      );
+      const columns = await legacyStore.db.$queryRawUnsafe<Array<{ name: string }>>(`PRAGMA table_info("Client")`);
+      const invitationTable = await legacyStore.db.$queryRawUnsafe<Array<{ name: string }>>(
+        `SELECT "name" FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'Invitation'`,
+      );
+      expect(clients).toEqual([{ id: clientId, name: 'existing', revokedAt: new Date('2026-09-22T00:00:00.000Z') }]);
+      expect(columns.map((column) => column.name)).not.toContain('registrationTokenHash');
+      expect(invitationTable).toEqual([]);
+    } finally {
+      await legacyStore.db.$disconnect();
+      await rm(legacyDirectory, { recursive: true, force: true });
+    }
   });
 
   it('并发重放只允许一个请求，记录在整个有效时间窗口内保留', async () => {
