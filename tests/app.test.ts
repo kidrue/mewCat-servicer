@@ -36,14 +36,24 @@ describe('真实加密 HTTP 链路', () => {
     return { nonce, envelope: await seal({ v: 1, method: 'POST', path, timestamp: options.timestamp ?? Date.now(), nonce, data }, (options.identity ?? clientIdentity).signing.privateKey, serverIdentity.encryption.publicKey, clientId, 'server') };
   }
   async function register() {
-    const invitation = await fixture.store.issueInvitation(3600);
-    const { envelope } = await wire('registration', '/v1/clients/register', { invitation, name: 'Chrome Translate', signingKey: publicClient.signingKey, encryptionKey: publicClient.encryptionKey });
+    const { envelope } = await wire('registration', '/v1/clients/register', { name: 'Chrome Translate', signingKey: publicClient.signingKey, encryptionKey: publicClient.encryptionKey });
     const response = await app.inject({ method: 'POST', url: '/v1/clients/register', payload: { envelope } });
     expect(response.statusCode).toBe(201);
     const payload = await open(response.json().envelope as string, clientIdentity.encryption.privateKey, serverIdentity.signing.publicKey, 'server', 'registration') as { data: { clientId: string } };
     return payload.data.clientId;
   }
   const translate = { texts: ['hello'], sourceLanguage: 'auto', targetLanguage: 'zh-CN' };
+
+  it('注册不接受已废弃的邀请码字段', async () => {
+    const { envelope } = await wire('registration', '/v1/clients/register', {
+      invitation: 'a'.repeat(43),
+      name: 'Chrome Translate',
+      signingKey: publicClient.signingKey,
+      encryptionKey: publicClient.encryptionKey,
+    });
+    const response = await app.inject({ method: 'POST', url: '/v1/clients/register', payload: { envelope } });
+    expect(response.statusCode).toBe(401);
+  });
 
   it('注册、翻译、用量查询可解密；数据库不保存原文和译文', async () => {
     const clientId = await register();

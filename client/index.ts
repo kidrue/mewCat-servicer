@@ -10,7 +10,9 @@ export interface ClientOptions {
   fetcher?: typeof fetch;
   pinnedSigningThumbprint?: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
 }
+export interface RequestOptions { signal?: AbortSignal; timeoutMs?: number }
 export class TranslationError extends Error {
   constructor(public readonly code: string, message: string, public readonly status: number) { super(message); this.name = 'TranslationError'; }
 }
@@ -27,7 +29,9 @@ export class TranslationClient {
     if (url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('baseUrl 应为服务的 origin，不含路径或凭证');
     const fetcher = options.fetcher ?? fetch;
     const timeoutMs = options.timeoutMs ?? 45_000;
-    const response = await fetcher(`${url.origin}/v1/keys`, { redirect: 'error', credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) });
+    options.signal?.throwIfAborted();
+    const signal = options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
+    const response = await fetcher(`${url.origin}/v1/keys`, { redirect: 'error', credentials: 'omit', cache: 'no-store', signal });
     if (!response.ok) throw new TranslationError('KEYS_UNAVAILABLE', '无法获取服务器公钥', response.status);
     const keys = serverKeysSchema.parse(await response.json());
     if (options.pinnedSigningThumbprint && await calculateJwkThumbprint(keys.signingKey) !== options.pinnedSigningThumbprint) throw new Error('服务器公钥与固定指纹不一致');
@@ -38,14 +42,16 @@ export class TranslationClient {
   }
   getState(): ClientState { return { ...this.state }; }
 
-  private async request(path: string, data: unknown, registration = false): Promise<unknown> {
+  private async request(path: string, data: unknown, registration = false, options: RequestOptions = {}): Promise<unknown> {
     const clientId = registration ? 'registration' : this.state.clientId;
-    if (!clientId) throw new Error('请先使用邀请码注册客户端');
+    if (!clientId) throw new Error('请先注册客户端');
+    options.signal?.throwIfAborted();
     const nonce = crypto.randomUUID();
     const timestamp = Date.now();
     const envelope = await seal({ v: 1, method: 'POST', path, timestamp, nonce, data }, this.state.identity.signing.privateKey, this.serverEncryptionKey, clientId, this.keys.keyId);
     const response = await this.fetcher(`${this.baseUrl}${path}`, {
-      method: 'POST', redirect: 'error', credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(this.timeoutMs),
+      method: 'POST', redirect: 'error', credentials: 'omit', cache: 'no-store',
+      signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(options.timeoutMs ?? this.timeoutMs)]) : AbortSignal.timeout(options.timeoutMs ?? this.timeoutMs),
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ envelope }),
     });
     const wire: unknown = await response.json();
@@ -61,20 +67,20 @@ export class TranslationClient {
     if (!response.ok) throw new Error('服务器响应状态不一致');
     return payload.data;
   }
-  async register(invitation: string, name = 'chorme-translate'): Promise<string> {
+  async register(name = 'chorme-translate', options: RequestOptions = {}): Promise<string> {
     if (this.state.clientId) throw new Error('客户端已经注册');
     const keys = await publicKeys(this.state.identity, 'registration');
-    const result = z.strictObject({ clientId: z.string().uuid() }).parse(await this.request('/v1/clients/register', { invitation, name, signingKey: keys.signingKey, encryptionKey: keys.encryptionKey }, true));
+    const result = z.strictObject({ clientId: z.string().uuid() }).parse(await this.request('/v1/clients/register', { name, signingKey: keys.signingKey, encryptionKey: keys.encryptionKey }, true, options));
     this.state.clientId = result.clientId;
     return result.clientId;
   }
-  async translate(input: { texts: string[]; targetLanguage: string; sourceLanguage?: string }) {
+  async translate(input: { texts: string[]; targetLanguage: string; sourceLanguage?: string }, options: RequestOptions = {}) {
     const data = translationSchema.parse(input);
-    const result = translationResultSchema.parse(await this.request('/v1/translate', data));
+    const result = translationResultSchema.parse(await this.request('/v1/translate', data, false, options));
     if (result.translations.length !== data.texts.length) throw new Error('服务器响应译文数量不正确');
     return result;
   }
-  async usage() { return usageSchema.parse(await this.request('/v1/usage', {})); }
+  async usage(options: RequestOptions = {}) { return usageSchema.parse(await this.request('/v1/usage', {}, false, options)); }
 }
 
 export { createIdentity } from '../src/protocol.js';

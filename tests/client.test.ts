@@ -29,7 +29,7 @@ describe('浏览器兼容客户端', () => {
 
   it('原生 Web Crypto 身份完成注册、翻译、持久化状态恢复和用量查询', async () => {
     const client = await TranslationClient.connect({ baseUrl: 'http://localhost:3000', fetcher });
-    await client.register(await fixture.store.issueInvitation(3600), 'chorme-translate');
+    await client.register('chorme-translate');
     expect(await client.translate({ texts: ['hello'], targetLanguage: 'zh-CN' })).toEqual({ translations: ['你好'] });
     const state = structuredClone(client.getState());
     expect(state.identity.encryption.privateKey.extractable).toBe(false);
@@ -47,18 +47,17 @@ describe('浏览器兼容客户端', () => {
     await expect(client.translate({ texts: ['hello'], targetLanguage: 'zh-CN' })).rejects.toThrow(/响应/);
   });
 
-  it('网络丢失注册响应后，同一持久化身份和邀请码能安全恢复', async () => {
+  it('网络丢失注册响应后，同一持久化身份能安全恢复', async () => {
     const state = { identity: await createIdentity() };
-    const invitation = await fixture.store.issueInvitation(3600);
     const loseResponse: typeof fetch = async (url, options) => {
       const response = await fetcher(url, options);
       if (options?.method === 'POST') throw new TypeError('Network disconnected after commit');
       return response;
     };
     const first = await TranslationClient.connect({ baseUrl: 'http://localhost:3000', state: structuredClone(state), fetcher: loseResponse });
-    await expect(first.register(invitation)).rejects.toThrow('Network disconnected');
+    await expect(first.register()).rejects.toThrow('Network disconnected');
     const retry = await TranslationClient.connect({ baseUrl: 'http://localhost:3000', state: structuredClone(state), fetcher });
-    const clientId = await retry.register(invitation);
+    const clientId = await retry.register();
     expect(await fixture.store.db.client.count()).toBe(1);
     expect((await fixture.store.db.client.findFirstOrThrow()).id).toBe(clientId);
     expect(await retry.usage()).toMatchObject({ usedCharacters: 0 });
@@ -77,5 +76,30 @@ describe('浏览器兼容客户端', () => {
     await expect(TranslationClient.connect({ baseUrl: 'http://example.com', fetcher })).rejects.toThrow(/HTTPS/);
     const client = await TranslationClient.connect({ baseUrl: 'http://localhost:3000', fetcher });
     await expect(client.translate({ texts: ['hello'], targetLanguage: 'zh-CN' })).rejects.toThrow(/注册/);
+  });
+
+  it('连接和单次翻译均支持外部取消信号', async () => {
+    const connectController = new AbortController();
+    connectController.abort();
+    await expect(TranslationClient.connect({ baseUrl: 'http://localhost:3000', fetcher, signal: connectController.signal })).rejects.toMatchObject({ name: 'AbortError' });
+
+    const keys = await publicKeys(server, 'server');
+    const identity = await createIdentity();
+    const requestController = new AbortController();
+    const waitingFetcher: typeof fetch = async (_url, init) => {
+      if (init?.method !== 'POST') return Response.json(keys);
+      init.signal?.throwIfAborted();
+      return await new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+      });
+    };
+    const client = await TranslationClient.connect({
+      baseUrl: 'http://localhost:3000',
+      state: { identity, clientId: crypto.randomUUID() },
+      fetcher: waitingFetcher,
+    });
+    const pending = client.translate({ texts: ['hello'], targetLanguage: 'zh-CN' }, { signal: requestController.signal, timeoutMs: 1000 });
+    requestController.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
 });

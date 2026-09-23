@@ -9,7 +9,7 @@ export const translationSchema = z.strictObject({
 }).refine((data) => data.texts.reduce((total, text) => total + text.length, 0) <= 5000, 'Total text length exceeds 5000');
 export type TranslationInput = z.infer<typeof translationSchema>;
 export const registrationSchema = z.strictObject({
-  invitation: z.string().regex(/^[A-Za-z0-9_-]{43}$/), name: z.string().trim().min(1).max(80),
+  name: z.string().trim().min(1).max(80),
   signingKey: signingPublicKeySchema, encryptionKey: encryptionPublicKeySchema,
 });
 export const translationResultSchema = z.strictObject({ translations: z.array(z.string().min(1).max(40_000)).min(1).max(20) });
