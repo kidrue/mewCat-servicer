@@ -79,7 +79,7 @@ nano .env
 NODE_ENV=production
 SILICONFLOW_API_KEY=填写真实密钥
 SILICONFLOW_MODEL=填写控制台当前可用的模型ID
-ALLOWED_ORIGINS=chrome-extension://填写你的扩展ID
+ALLOWED_ORIGINS=chrome-extension://dbginmjacelgagkfhjkhcbajnaalolfp
 MAX_CONCURRENT_REQUESTS=4
 ```
 
