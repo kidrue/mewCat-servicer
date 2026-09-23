@@ -18,7 +18,7 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 120
     environment: production
     env:
       DEPLOY_HOST: ${{ secrets.ALIYUN_HOST }}
@@ -49,6 +49,8 @@ jobs:
           mkdir -p bundle
           docker save "mewcat-tools:$GITHUB_SHA" "mewcat-api:$GITHUB_SHA" | gzip > bundle/images.tar.gz
           cp compose.yaml deploy/compose.images.yaml deploy/deploy.sh bundle/
+          split -n l/8 -d -a 2 bundle/images.tar.gz bundle/images.tar.gz.part-
+          rm bundle/images.tar.gz
       - name: 配置 SSH 并检查部署参数
         env:
           SSH_PRIVATE_KEY: ${{ secrets.ALIYUN_SSH_PRIVATE_KEY }}
@@ -70,8 +72,20 @@ jobs:
           remote="$DEPLOY_USER@$DEPLOY_HOST"
           incoming="/tmp/mewcat-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           ssh_opts=(-p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
+          scp_opts=(-P "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
           ssh "${ssh_opts[@]}" "$remote" "umask 077; mkdir '$incoming'"
-          tar -C bundle -czf - . | ssh "${ssh_opts[@]}" "$remote" "tar -xzf - -C '$incoming'"
+          tar -C bundle --exclude='images.tar.gz.part-*' -czf - . | ssh "${ssh_opts[@]}" "$remote" "tar -xzf - -C '$incoming'"
+          pids=()
+          for part in bundle/images.tar.gz.part-*; do
+            scp "${scp_opts[@]}" "$part" "$remote:$incoming/" &
+            pids+=("$!")
+          done
+          failed=0
+          for pid in "${pids[@]}"; do
+            if ! wait "$pid"; then failed=1; fi
+          done
+          test "$failed" -eq 0
+          ssh "${ssh_opts[@]}" "$remote" "cat '$incoming'/images.tar.gz.part-* > '$incoming/images.tar.gz'"
           ssh "${ssh_opts[@]}" "$remote" "bash '$incoming/deploy.sh' '$DEPLOY_PATH' '$COMPOSE_PROJECT' '$GITHUB_SHA' '$incoming'"
       - name: 清理 Runner SSH 私钥
         if: always()
