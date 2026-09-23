@@ -33,8 +33,8 @@ describe('入口资源保护', () => {
       store: fixture.store,
       keys: { identity: serverIdentity, publicKeys: await publicKeys(serverIdentity, 'server'), ipHashSecret: 'salt' },
     });
-    const register = async () => {
-      const clientIdentity = await createIdentity();
+    const register = async (identity?: Awaited<ReturnType<typeof createIdentity>>) => {
+      const clientIdentity = identity ?? await createIdentity();
       const clientKeys = await publicKeys(clientIdentity, 'registration');
       const path = '/v1/clients/register';
       const envelope = await seal(
@@ -50,7 +50,9 @@ describe('入口资源保护', () => {
       return app.inject({ method: 'POST', url: path, payload: { envelope } });
     };
 
-    expect((await register()).statusCode).toBe(201);
+    const clientIdentity = await createIdentity();
+    expect((await register(clientIdentity)).statusCode).toBe(201);
+    expect((await register(clientIdentity)).statusCode).toBe(201);
     expect((await register()).statusCode).toBe(429);
     expect(await fixture.store.db.client.count()).toBe(1);
   });

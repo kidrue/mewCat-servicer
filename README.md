@@ -60,10 +60,9 @@ const client = await TranslationClient.connect({
   // pinnedSigningThumbprint: '部署时获得的公钥指纹',
 });
 
-// 注册之前也保存密钥，避免 service worker 重启后生成新的身份。
-await saveClientState(origin, client.getState());
-
-export async function activate() {
+if (!saved?.clientId) {
+  // 注册之前也保存密钥，避免 service worker 重启后生成新的身份。
+  await saveClientState(origin, client.getState());
   await client.register('chorme-translate');
   await saveClientState(origin, client.getState());
 }
@@ -72,8 +71,8 @@ export async function translate(texts, targetLanguage) {
   return client.translate({ texts, sourceLanguage: 'auto', targetLanguage });
 }
 
-// 首次激活时调用 activate()，服务端按设备密钥自动注册。
-// 已激活后：await translate(['Hello world'], 'zh-CN');
+// 首次连接时按设备密钥自动注册；后续启动复用已保存的 clientId。
+// await translate(['Hello world'], 'zh-CN');
 // 返回：{ translations: ['你好，世界'] }
 // await client.usage(); // 本设备当天已用字符、上限、下次 UTC 重置时间
 ```

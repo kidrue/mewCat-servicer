@@ -36,7 +36,7 @@ export class Store {
     this.writes = result.catch(() => undefined);
     return result;
   }
-  async registerClient(name: string, signing: JWK, encryption: JWK) {
+  async registerClient(name: string, signing: JWK, encryption: JWK, registrationBuckets: Bucket[] = []) {
     const keyThumbprint = await calculateJwkThumbprint(signing);
     try {
       return await this.atomic(async (tx) => {
@@ -46,6 +46,7 @@ export class Store {
           if (await calculateJwkThumbprint(JSON.parse(existing.encryptionKey)) === await calculateJwkThumbprint(encryption)) return existing;
           throw new ApiError(409, 'CLIENT_EXISTS', '该设备密钥已注册，但响应公钥不匹配');
         }
+        await consume(tx, registrationBuckets);
         return tx.client.create({ data: { name, signingKey: JSON.stringify(signing), encryptionKey: JSON.stringify(encryption), keyThumbprint } });
       });
     } catch (error) {

@@ -111,8 +111,9 @@ export async function buildApp({ config, store, keys, fetcher }: Options) {
   secureRoute('/v1/clients/register', 201, async (auth, request) => {
     const data = registrationSchema.parse(auth.request.data);
     const window = dayWindow();
-    await store.consumeBuckets([{ key: `register:${hashIp(request.ip, keys.ipHashSecret)}:${window.id}`, amount: 1, limit: config.REGISTRATIONS_PER_IP_PER_DAY, expiresAt: window.expiresAt }]);
-    const client = await store.registerClient(data.name, data.signingKey, data.encryptionKey);
+    const client = await store.registerClient(data.name, data.signingKey, data.encryptionKey, [
+      { key: `register:${hashIp(request.ip, keys.ipHashSecret)}:${window.id}`, amount: 1, limit: config.REGISTRATIONS_PER_IP_PER_DAY, expiresAt: window.expiresAt },
+    ]);
     return { clientId: client.id };
   });
   secureRoute('/v1/usage', 200, async (auth) => {
