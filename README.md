@@ -85,6 +85,8 @@ export async function translate(texts, targetLanguage) {
 
 ## 接口
 
+完整的请求字段、响应结构、状态码及客户端示例见 [API 接口文档](docs/api.md)；加密信封的算法与构造过程见 [协议文档](docs/protocol.md)。
+
 | 方法与路径 | 说明 |
 | --- | --- |
 | `GET /health` | 数据库健康状态 |
