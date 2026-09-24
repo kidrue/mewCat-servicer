@@ -23,7 +23,7 @@ services:
       PORT: "3000"
       DATABASE_URL: file:/app/data/mewcat.db
       KEYS_FILE: /app/secrets/server-keys.json
-      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-chrome-extension://dbginmjacelgagkfhjkhcbajnaalolfp}"
+      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-chrome-extension://dbginmjacelgagkfhjkhcbajnaalolfp,chrome-extension://hkmlfkldkaickokgmgongeimeikkeadb}"
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
