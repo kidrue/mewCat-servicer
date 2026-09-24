@@ -75,6 +75,7 @@ jobs:
         run: |
           test -n "$SILICONFLOW_API_KEY"
           [[ "$SILICONFLOW_API_KEY" != *$'\n'* && "$SILICONFLOW_API_KEY" != *$'\r'* ]]
+          [[ "$SILICONFLOW_API_KEY" =~ ^sk-[a-zA-Z0-9._-]+$ ]]
           [[ "$SILICONFLOW_BASE_URL" =~ ^https://[^[:space:]]+$ ]]
           [[ "$SILICONFLOW_MODEL" =~ ^[a-zA-Z0-9._/-]+$ ]]
           remote="$DEPLOY_USER@$DEPLOY_HOST"
