@@ -10,6 +10,7 @@ incoming=${4:?缺少发布包目录}
 [[ "$project" =~ ^[a-z0-9][a-z0-9_-]*$ ]]
 [[ "$MEWCAT_IMAGE_TAG" =~ ^[a-f0-9]{40}$ ]]
 [[ "$incoming" =~ ^/tmp/mewcat-[0-9]+-[0-9]+$ ]]
+trap 'rm -f "$incoming/runtime.env"' EXIT
 cd "$deploy_path"
 test -s .env || { echo '请先配置服务器 .env'; exit 1; }
 test -s secrets/server-keys.json || { echo '请先生成服务器密钥'; exit 1; }
@@ -34,6 +35,11 @@ cp -a .env secrets "$backup/"
 if [[ -L .deploy/current ]]; then
   readlink -f .deploy/current > "$backup/previous-release"
 fi
+test -s "$incoming/runtime.env" || { echo '缺少生产运行时配置'; exit 1; }
+"${compose[@]}" run --rm --no-deps --pull never --user 0 \
+  -v "$deploy_path:/deployment" \
+  -v "$incoming:/incoming:ro" \
+  migrate node dist/scripts/update-runtime-env.js /deployment/.env /incoming/runtime.env
 "${compose[@]}" stop api
 on_error() {
   echo "部署失败；备份位于 $backup，发布配置位于 $release。检查数据库迁移状态后人工恢复。" >&2
@@ -51,6 +57,7 @@ rm -f \
   "$incoming"/images.tar.gz.part-* \
   "$incoming/compose.yaml" \
   "$incoming/compose.images.yaml" \
-  "$incoming/deploy.sh"
+  "$incoming/deploy.sh" \
+  "$incoming/runtime.env"
 rmdir "$incoming" || true
 echo "部署成功：$MEWCAT_IMAGE_TAG；备份：$backup"

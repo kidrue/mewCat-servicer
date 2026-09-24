@@ -68,7 +68,15 @@ jobs:
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
       - name: 上传镜像并部署
+        env:
+          SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
+          SILICONFLOW_BASE_URL: ${{ vars.SILICONFLOW_BASE_URL || 'https://api.siliconflow.cn/v1' }}
+          SILICONFLOW_MODEL: ${{ vars.SILICONFLOW_MODEL || 'deepseek-ai/DeepSeek-V4-Flash' }}
         run: |
+          test -n "$SILICONFLOW_API_KEY"
+          [[ "$SILICONFLOW_API_KEY" != *$'\n'* && "$SILICONFLOW_API_KEY" != *$'\r'* ]]
+          [[ "$SILICONFLOW_BASE_URL" =~ ^https://[^[:space:]]+$ ]]
+          [[ "$SILICONFLOW_MODEL" =~ ^[a-zA-Z0-9._/-]+$ ]]
           remote="$DEPLOY_USER@$DEPLOY_HOST"
           incoming="/tmp/mewcat-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           ssh_opts=(-p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
@@ -86,6 +94,11 @@ jobs:
           done
           test "$failed" -eq 0
           ssh "${ssh_opts[@]}" "$remote" "cat '$incoming'/images.tar.gz.part-* > '$incoming/images.tar.gz'"
+          {
+            printf 'SILICONFLOW_API_KEY=%s\n' "$SILICONFLOW_API_KEY"
+            printf 'SILICONFLOW_BASE_URL=%s\n' "$SILICONFLOW_BASE_URL"
+            printf 'SILICONFLOW_MODEL=%s\n' "$SILICONFLOW_MODEL"
+          } | ssh "${ssh_opts[@]}" "$remote" "umask 077; cat > '$incoming/runtime.env'"
           ssh "${ssh_opts[@]}" "$remote" "bash '$incoming/deploy.sh' '$DEPLOY_PATH' '$COMPOSE_PROJECT' '$GITHUB_SHA' '$incoming'"
       - name: 清理 Runner SSH 私钥
         if: always()

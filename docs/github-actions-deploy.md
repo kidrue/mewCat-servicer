@@ -57,6 +57,7 @@ ssh-keygen -lf aliyun_known_hosts
 | `ALIYUN_USER` | SSH 用户，例如 `root` |
 | `ALIYUN_SSH_PRIVATE_KEY` | 上一步生成的完整私钥，包含 BEGIN/END 行 |
 | `ALIYUN_SSH_KNOWN_HOSTS` | 经核验的 known_hosts 行 |
+| `SILICONFLOW_API_KEY` | 生产翻译供应商 API Key；必须放在 `production` Environment Secret，不使用 Variable |
 
 可选 Variables：
 
@@ -66,8 +67,10 @@ ssh-keygen -lf aliyun_known_hosts
 | `ALIYUN_DEPLOY_PATH` | `/opt/mewCat-service` | 已完成初始化的绝对路径，仅支持字母、数字、下划线、连字符及 `/` |
 | `ALIYUN_COMPOSE_PROJECT` | `mewcat-service` | 必须与现有部署项目名一致 |
 | `ALIYUN_PLATFORM` | `linux/amd64` | `uname -m` 为 `aarch64` 时设置 `linux/arm64` |
+| `SILICONFLOW_BASE_URL` | `https://api.siliconflow.cn/v1` | 生产翻译供应商 OpenAI 兼容 API 地址 |
+| `SILICONFLOW_MODEL` | `deepseek-ai/DeepSeek-V4-Flash` | 生产翻译模型标识符 |
 
-供应商 API Key 和服务器身份密钥继续只保存在服务器上，不加入 GitHub Secrets。将本次工作流及脚本提交并推送到 `main` 后，在 Actions 查看运行结果。
+服务器身份密钥继续只保存在服务器上。供应商 API Key 由 `production` Environment Secret 管理：工作流仅在部署步骤读取它，通过 SSH stdin 写入权限为 `0600` 的远端临时文件，不进入 Docker build 参数、镜像、发布压缩包或命令参数。部署脚本先备份旧 `.env`，再原子更新三项供应商配置；Secret 缺失或配置非法时会在停止旧 API 前失败。成功部署后删除临时文件。将本次工作流及脚本提交并推送到 `main` 后，在 Actions 查看运行结果。
 
 ## 4. 发布后管理
 
