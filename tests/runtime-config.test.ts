@@ -35,8 +35,8 @@ afterEach(async () => {
 describe('生产运行时配置更新', () => {
   it('原子替换允许的上游配置并保留其他环境变量', async () => {
     const { envPath, runtimePath } = await fixture(
-      'DATABASE_URL=file:/app/data/mewcat.db\nSILICONFLOW_API_KEY=old-key\nSILICONFLOW_BASE_URL=https://api.deepseek.com\nSILICONFLOW_MODEL=deepseek-flash\n',
-      'SILICONFLOW_API_KEY=sk-new-key\nSILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1\nSILICONFLOW_MODEL=deepseek-ai/DeepSeek-V4-Flash\n',
+      'DATABASE_URL=file:/app/data/mewcat.db\nSILICONFLOW_API_KEY=old-key\nSILICONFLOW_BASE_URL=https://api.deepseek.com\nSILICONFLOW_MODEL=deepseek-flash\nALLOWED_ORIGINS=chrome-extension://oldoldoldoldoldoldoldoldoldoldol\n',
+      'SILICONFLOW_API_KEY=sk-new-key\nSILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1\nSILICONFLOW_MODEL=deepseek-ai/DeepSeek-V4-Flash\nALLOWED_ORIGINS=chrome-extension://nnmceoehnacdjdpeeocdopnaejcnaibm,chrome-extension://hkmlfkldkaickokgmgongeimeikkeadb\n',
     );
 
     const result = runUpdater(envPath, runtimePath);
@@ -44,7 +44,7 @@ describe('生产运行时配置更新', () => {
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
     expect(await readFile(envPath, 'utf8')).toBe(
-      'DATABASE_URL=file:/app/data/mewcat.db\nSILICONFLOW_API_KEY=sk-new-key\nSILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1\nSILICONFLOW_MODEL=deepseek-ai/DeepSeek-V4-Flash\n',
+      'DATABASE_URL=file:/app/data/mewcat.db\nSILICONFLOW_API_KEY=sk-new-key\nSILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1\nSILICONFLOW_MODEL=deepseek-ai/DeepSeek-V4-Flash\nALLOWED_ORIGINS=chrome-extension://nnmceoehnacdjdpeeocdopnaejcnaibm,chrome-extension://hkmlfkldkaickokgmgongeimeikkeadb\n',
     );
   });
 
@@ -67,7 +67,7 @@ describe('生产运行时配置更新', () => {
     const original = 'SILICONFLOW_API_KEY=sk-old-key\n';
     const { envPath, runtimePath } = await fixture(
       original,
-      'SILICONFLOW_API_KEY=\ufeffsk-new-key\nSILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1\nSILICONFLOW_MODEL=deepseek-ai/DeepSeek-V4-Flash\n',
+      'SILICONFLOW_API_KEY=\ufeffsk-new-key\nSILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1\nSILICONFLOW_MODEL=deepseek-ai/DeepSeek-V4-Flash\nALLOWED_ORIGINS=chrome-extension://nnmceoehnacdjdpeeocdopnaejcnaibm\n',
     );
 
     const result = runUpdater(envPath, runtimePath);

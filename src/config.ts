@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import repositoryOrigins from '../config/allowed-origins.json' with { type: 'json' };
+
+export const defaultAllowedOrigins = z.array(
+  z.string().regex(/^chrome-extension:\/\/[a-p]{32}$/),
+).min(1).parse(repositoryOrigins).join(',');
 
 const positive = (fallback: number, max = 2_000_000_000) => z.coerce.number().int().positive().max(max).default(fallback);
 const schema = z.object({
@@ -14,7 +19,7 @@ const schema = z.object({
   CLIENT_DAILY_CHARACTERS: positive(20_000), IP_DAILY_CHARACTERS: positive(100_000),
   GLOBAL_DAILY_CHARACTERS: positive(1_000_000), GLOBAL_DAILY_REQUESTS: positive(10_000),
   REGISTRATIONS_PER_IP_PER_DAY: positive(10), INGRESS_REQUESTS_PER_MINUTE: positive(120),
-  ALLOWED_ORIGINS: z.string().default(''), TRUST_PROXY: z.string().default(''),
+  ALLOWED_ORIGINS: z.string().transform((value) => value || defaultAllowedOrigins).default(defaultAllowedOrigins), TRUST_PROXY: z.string().default(''),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'silent']).default('info'),
 });
 export type Config = z.infer<typeof schema>;

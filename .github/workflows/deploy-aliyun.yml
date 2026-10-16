@@ -35,11 +35,15 @@ jobs:
           cache: npm
       - name: 安装依赖并验证
         run: |
+          bash -n deploy/deploy.sh
+          bash -n deploy/cleanup-images.sh
           npx --yes npm@11 ci
           npm run typecheck
           npm test
           npm run build
           npm run smoke
+      - name: 从构建产物注入接口访问白名单
+        run: node dist/scripts/export-allowed-origins.js >> "$GITHUB_ENV"
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - name: 构建应用及迁移镜像
@@ -48,7 +52,7 @@ jobs:
           docker buildx build --platform "$IMAGE_PLATFORM" --target runtime --load -t "mewcat-api:$GITHUB_SHA" .
           mkdir -p bundle
           docker save "mewcat-tools:$GITHUB_SHA" "mewcat-api:$GITHUB_SHA" | gzip > bundle/images.tar.gz
-          cp compose.yaml deploy/compose.images.yaml deploy/deploy.sh bundle/
+          cp compose.yaml deploy/compose.images.yaml deploy/deploy.sh deploy/cleanup-images.sh bundle/
           split -n l/8 -d -a 2 bundle/images.tar.gz bundle/images.tar.gz.part-
           rm bundle/images.tar.gz
       - name: 配置 SSH 并检查部署参数
@@ -78,6 +82,7 @@ jobs:
           [[ "$SILICONFLOW_API_KEY" =~ ^sk-[a-zA-Z0-9._-]+$ ]]
           [[ "$SILICONFLOW_BASE_URL" =~ ^https://[^[:space:]]+$ ]]
           [[ "$SILICONFLOW_MODEL" =~ ^[a-zA-Z0-9._/-]+$ ]]
+          test -n "$ALLOWED_ORIGINS"
           remote="$DEPLOY_USER@$DEPLOY_HOST"
           incoming="/tmp/mewcat-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           ssh_opts=(-p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
@@ -99,6 +104,7 @@ jobs:
             printf 'SILICONFLOW_API_KEY=%s\n' "$SILICONFLOW_API_KEY"
             printf 'SILICONFLOW_BASE_URL=%s\n' "$SILICONFLOW_BASE_URL"
             printf 'SILICONFLOW_MODEL=%s\n' "$SILICONFLOW_MODEL"
+            printf 'ALLOWED_ORIGINS=%s\n' "$ALLOWED_ORIGINS"
           } | ssh "${ssh_opts[@]}" "$remote" "umask 077; cat > '$incoming/runtime.env'"
           ssh "${ssh_opts[@]}" "$remote" "bash '$incoming/deploy.sh' '$DEPLOY_PATH' '$COMPOSE_PROJECT' '$GITHUB_SHA' '$incoming'"
       - name: 清理 Runner SSH 私钥

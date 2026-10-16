@@ -12,6 +12,7 @@ const environment = {
   DATABASE_URL: `file:${relative(process.cwd(), join(directory, 'smoke.db')).replaceAll('\\', '/')}`,
   KEYS_FILE: join(directory, 'server-keys.json'),
   SILICONFLOW_API_KEY: 'smoke-placeholder-never-used', SILICONFLOW_MODEL: 'smoke-placeholder-never-used',
+  ALLOWED_ORIGINS: '',
 };
 
 async function command(args, expectedCode = 0) {
@@ -26,6 +27,9 @@ async function command(args, expectedCode = 0) {
 
 let service;
 try {
+  const origins = JSON.parse(await readFile(new URL('../config/allowed-origins.json', import.meta.url), 'utf8'));
+  const exportedOrigins = await command([resolve('dist/scripts/export-allowed-origins.js')]);
+  assert.equal(exportedOrigins.trim(), `ALLOWED_ORIGINS=${origins.join(',')}`, 'Deployment must export the built repository allowlist');
   await command([resolve('node_modules/prisma/build/index.js'), 'migrate', 'deploy']);
   await command([resolve('dist/scripts/admin.js'), 'keys']);
   const original = await readFile(environment.KEYS_FILE, 'utf8');
@@ -54,6 +58,13 @@ try {
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
   }
   assert.ok(ready, `Server did not start: ${logs}`);
+  for (const origin of origins) {
+    const response = await fetch(`${baseUrl}/v1/keys`, { headers: { Origin: origin } });
+    assert.equal(response.status, 200, `Repository origin must be allowed: ${origin}`);
+    assert.equal(response.headers.get('access-control-allow-origin'), origin);
+  }
+  const rejectedOrigin = await fetch(`${baseUrl}/v1/keys`, { headers: { Origin: 'https://unlisted.example' } });
+  assert.equal(rejectedOrigin.status, 403, 'Unlisted origins must remain blocked');
   // 使用真正构建出的客户端通过本地 TCP 请求完成注册和用量查询。
   const { TranslationClient } = await import('../dist/client/index.js');
   const client = await TranslationClient.connect({ baseUrl });
@@ -62,7 +73,7 @@ try {
   assert.equal((await client.usage()).usedCharacters, 0);
   await command([resolve('dist/scripts/admin.js'), 'revoke', clientId]);
   await assert.rejects(client.usage(), (error) => error.code === 'CLIENT_REVOKED');
-  console.log('Smoke passed: relative database URL, migrations, key protection, compiled server, TCP registration/usage/revocation. No paid API called.');
+  console.log('Smoke passed: built allowlist export, Origin/CORS checks, relative database URL, migrations, key protection, compiled server, TCP registration/usage/revocation. No paid API called.');
 } finally {
   if (service && service.exitCode === null) {
     const exited = once(service, 'exit');

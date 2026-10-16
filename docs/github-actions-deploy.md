@@ -70,11 +70,17 @@ ssh-keygen -lf aliyun_known_hosts
 | `SILICONFLOW_BASE_URL` | `https://api.siliconflow.cn/v1` | 生产翻译供应商 OpenAI 兼容 API 地址 |
 | `SILICONFLOW_MODEL` | `deepseek-ai/DeepSeek-V4-Flash` | 生产翻译模型标识符 |
 
-服务器身份密钥继续只保存在服务器上。供应商 API Key 由 `production` Environment Secret 管理：工作流仅在部署步骤读取它，通过 SSH stdin 写入权限为 `0600` 的远端临时文件，不进入 Docker build 参数、镜像、发布压缩包或命令参数。部署脚本先备份旧 `.env`，再原子更新三项供应商配置；Secret 缺失或配置非法时会在停止旧 API 前失败。成功部署后删除临时文件。将本次工作流及脚本提交并推送到 `main` 后，在 Actions 查看运行结果。
+接口访问白名单统一维护在仓库 [`config/allowed-origins.json`](../config/allowed-origins.json)，每项填写完整的 `chrome-extension://扩展ID`。构建会拒绝空列表及非法来源，并将配置打包进产物和镜像；构建后通过 `dist/scripts/export-allowed-origins.js` 导出到 `GITHUB_ENV`，部署时写入服务器 `.env` 的 `ALLOWED_ORIGINS`，覆盖旧值。后续仅需修改这个 JSON 文件并推送 `main`，无需在 GitHub Variables 或服务器重复维护列表。
+
+服务器身份密钥继续只保存在服务器上。供应商 API Key 由 `production` Environment Secret 管理：工作流仅在部署步骤读取它，通过 SSH stdin 写入权限为 `0600` 的远端临时文件，不进入 Docker build 参数、镜像、发布压缩包或命令参数。部署脚本先备份旧 `.env`，再原子更新三项供应商配置和来源白名单；Secret 缺失或配置非法时会在停止旧 API 前失败。成功部署后删除临时文件。将本次工作流及脚本提交并推送到 `main` 后，在 Actions 查看运行结果。
 
 ## 4. 发布后管理
 
-成功发布指向 `.deploy/current`；每次发布的 Compose 文件和镜像 SHA 保存在 `.deploy/releases/`，备份在 `.deploy/backups/`。不自动删除备份或旧镜像，需根据磁盘容量定期维护。失败上传可能在 `/tmp/mewcat-*` 留下镜像包，排查后可清理对应目录。
+成功发布指向 `.deploy/current`；每次发布的 Compose 文件和镜像 SHA 保存在 `.deploy/releases/`，备份在 `.deploy/backups/`。
+
+每次部署健康检查通过后，自动清理这个部署目录发布过的 `mewcat-api:<SHA>` 和 `mewcat-tools:<SHA>` 镜像，仅保留当前成功版本的一组镜像；当前成功版本记录在 `.deploy/successful-images`。其他项目的镜像、所有仍被容器引用的镜像（包括已停止的容器）都跳过，不使用强制删除或全局 prune。失败部署不触发清理，其遗留镜像在后续成功部署时一并清理；清理失败只告警，不影响已成功启动的服务，下次成功部署重试。
+
+数据库卷、服务器密钥和历史备份不参与清理。`.deploy/backups/` 中的数据库及配置备份仍会随部署次数增长，需要单独维护；超过保留范围的历史版本镜像可能已被删除，恢复时需重新取得对应镜像。失败上传可能在 `/tmp/mewcat-*` 留下镜像包，排查后可清理对应目录。
 
 后续管理使用成功发布对应的镜像和配置，避免直接使用旧源码的 `docker compose up --build`：
 

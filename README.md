@@ -143,7 +143,7 @@ npm run admin -- cleanup
 
 管理操作仅在服务器 CLI 进行，没有公开管理 API。数据库只保存公钥、加盐 IP 的额度索引、输入长度和 token 统计，不保存翻译原文/译文；业务日志不输出请求正文、密钥、原文或 IP。原文会发给硅基流动完成翻译，应在扩展隐私说明中告知。
 
-公网部署必须放在 HTTPS 反向代理之后；外层 TLS 负责初次获取服务器公钥的可信性，加密信封不能替代 HTTPS。配置 `ALLOWED_ORIGINS` 为实际 Chrome 扩展来源。Origin 可被非浏览器客户端伪造，只是附加限制。默认不信任代理头；仅当部署了可信代理时设置 `TRUST_PROXY` 为明确的 IP/CIDR，并确保外网不能绕过代理。不要用 `*` 或 `true`。
+公网部署必须放在 HTTPS 反向代理之后；外层 TLS 负责初次获取服务器公钥的可信性，加密信封不能替代 HTTPS。实际 Chrome 扩展来源统一维护在 [`config/allowed-origins.json`](config/allowed-origins.json)，构建时校验并打包，自动部署在构建后注入服务器 `ALLOWED_ORIGINS`；本地未设置或留空时使用仓库列表，也可显式设置该环境变量覆盖。修改仓库列表后需要重新构建部署。Origin 可被非浏览器客户端伪造，只是附加限制。默认不信任代理头；仅当部署了可信代理时设置 `TRUST_PROXY` 为明确的 IP/CIDR，并确保外网不能绕过代理。不要用 `*` 或 `true`。
 
 Docker Compose（需要先创建 `.env` 并生成 `secrets/server-keys.json`）：
 

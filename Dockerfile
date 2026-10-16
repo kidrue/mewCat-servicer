@@ -6,6 +6,7 @@ COPY prisma ./prisma
 COPY prisma.config.ts ./
 RUN npx --yes npm@11 ci
 COPY tsconfig*.json ./
+COPY config ./config
 COPY src ./src
 COPY client ./client
 COPY scripts ./scripts

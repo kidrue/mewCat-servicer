@@ -79,11 +79,11 @@ nano .env
 NODE_ENV=production
 SILICONFLOW_API_KEY=填写真实密钥
 SILICONFLOW_MODEL=填写控制台当前可用的模型ID
-ALLOWED_ORIGINS=chrome-extension://dbginmjacelgagkfhjkhcbajnaalolfp,chrome-extension://hkmlfkldkaickokgmgongeimeikkeadb
+ALLOWED_ORIGINS=
 MAX_CONCURRENT_REQUESTS=4
 ```
 
-Compose 在 `ALLOWED_ORIGINS` 未设置或为空时也会允许上述正式扩展与本机 unpacked 开发扩展；显式配置时以 `.env` 为准，多个来源使用逗号分隔。开发 ID 与 Chrome 配置及加载路径绑定，换开发机或路径后应按 `chrome://extensions` 显示的新 ID 更新允许列表。
+接口访问白名单统一维护在仓库的 `config/allowed-origins.json`，当前包含 Chrome Web Store 正式扩展、私钥构建扩展与本机 unpacked 开发扩展。构建会校验来源格式并将列表打包进产物和镜像；`ALLOWED_ORIGINS` 未设置或为空时使用这份列表，显式配置时以 `.env` 为准，多个来源使用逗号分隔。修改仓库列表后重新构建部署即可生效；若旧 `.env` 中已填写白名单，手动部署前将其清空以使用新版仓库配置。扩展 ID 与发布渠道、Chrome 配置及加载路径绑定，变更渠道、开发机或路径后应按 `chrome://extensions` 显示的新 ID 更新允许列表。
 
 建议选择支持 JSON 输出及非思考模式的文本模型。其余限额按预算调整。先构建，再使用工具容器在服务器本地生成密钥，不需要把开发机私钥上传：
 

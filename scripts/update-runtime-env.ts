@@ -5,6 +5,7 @@ const allowedKeys = [
   'SILICONFLOW_API_KEY',
   'SILICONFLOW_BASE_URL',
   'SILICONFLOW_MODEL',
+  'ALLOWED_ORIGINS',
 ] as const;
 const allowedKeySet = new Set<string>(allowedKeys);
 
@@ -29,6 +30,14 @@ function parseRuntimeConfig(text: string): Map<string, string> {
   const baseUrl = new URL(values.get('SILICONFLOW_BASE_URL')!);
   if (baseUrl.protocol !== 'https:')
     throw new Error('SILICONFLOW_BASE_URL 必须使用 HTTPS');
+  const origins = values.get('ALLOWED_ORIGINS')!.split(',');
+  if (
+    origins.some(
+      (origin) => !/^chrome-extension:\/\/[a-p]{32}$/.test(origin),
+    )
+  ) {
+    throw new Error('ALLOWED_ORIGINS 格式无效');
+  }
   return values;
 }
 

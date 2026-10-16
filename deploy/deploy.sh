@@ -52,12 +52,17 @@ trap on_error ERR
 "${compose[@]}" up -d --no-deps --no-build --wait --wait-timeout 120 api
 # 只有健康检查通过才更新成功发布指针。
 ln -sfn "$release" .deploy/current
+# 清理失败只告警，不影响已健康启动的服务；下次成功部署时重试。
+if ! bash "$incoming/cleanup-images.sh" "$deploy_path" "$MEWCAT_IMAGE_TAG"; then
+  echo '镜像清理未完成，服务已成功部署，请检查 Docker 状态及磁盘空间。' >&2
+fi
 rm -f \
   "$incoming/images.tar.gz" \
   "$incoming"/images.tar.gz.part-* \
   "$incoming/compose.yaml" \
   "$incoming/compose.images.yaml" \
   "$incoming/deploy.sh" \
+  "$incoming/cleanup-images.sh" \
   "$incoming/runtime.env"
 rmdir "$incoming" || true
 echo "部署成功：$MEWCAT_IMAGE_TAG；备份：$backup"
