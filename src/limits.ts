@@ -15,6 +15,16 @@ export function dayWindow(now = Date.now()) {
   return { id: String(start), expiresAt: new Date(start + 86_400_000) };
 }
 export const clientDailyKey = (clientId: string, now = Date.now()) => `client:${clientId}:day:${dayWindow(now).id}`;
+export function feedbackBuckets(config: Config, clientId: string, ipHash: string, now = Date.now()): Bucket[] {
+  const hour = Math.floor(now / 3_600_000);
+  const expiresAt = new Date((hour + 1) * 3_600_000);
+  const day = dayWindow(now);
+  return [
+    { key: `feedback:client:${clientId}:hour:${hour}`, amount: 1, limit: config.FEEDBACK_CLIENT_REQUESTS_PER_HOUR, expiresAt },
+    { key: `feedback:ip:${ipHash}:hour:${hour}`, amount: 1, limit: config.FEEDBACK_IP_REQUESTS_PER_HOUR, expiresAt },
+    { key: `feedback:global:day:${day.id}`, amount: 1, limit: config.FEEDBACK_GLOBAL_REQUESTS_PER_DAY, expiresAt: day.expiresAt },
+  ];
+}
 export function translationBuckets(config: Config, clientId: string, ipHash: string, characters: number, now = Date.now()): Bucket[] {
   const day = dayWindow(now);
   const minute = Math.floor(now / 60_000);

@@ -14,3 +14,11 @@ export const registrationSchema = z.strictObject({
 });
 export const translationResultSchema = z.strictObject({ translations: z.array(z.string().min(1).max(40_000)).min(1).max(20) });
 export const usageSchema = z.strictObject({ usedCharacters: z.number().int().nonnegative(), limitCharacters: z.number().int().positive(), resetsAt: z.string().datetime() });
+
+export const feedbackSchema = z.strictObject({
+  message: z.string().trim().min(5).max(5000),
+  replyEmail: z.string().trim().max(254).email().optional(),
+  extensionVersion: z.string().max(32).regex(/^\d+(?:\.\d+){0,3}$/),
+});
+export type FeedbackInput = z.infer<typeof feedbackSchema>;
+export const feedbackResultSchema = z.strictObject({ accepted: z.literal(true) });

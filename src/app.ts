@@ -8,16 +8,17 @@ import type { Config } from './config.js';
 import type { Store } from './store.js';
 import type { ServerKeys } from './keys.js';
 import { decryptEnvelope, readSigned, validateRequest, verifySigned, seal, type SignedRequest } from './protocol.js';
-import { registrationSchema, translationSchema } from './contracts.js';
+import { feedbackSchema, registrationSchema, translationSchema } from './contracts.js';
+import { createFeedbackMailer, type FeedbackMailer } from './feedback-mailer.js';
 import { ApiError, publicError } from './errors.js';
 import { createProvider, type Fetch } from './provider.js';
-import { clientDailyKey, dayWindow, hashIp, translationBuckets } from './limits.js';
+import { clientDailyKey, dayWindow, feedbackBuckets, hashIp, translationBuckets } from './limits.js';
 
-interface Options { config: Config; store: Store; keys: ServerKeys; fetcher?: Fetch }
+interface Options { config: Config; store: Store; keys: ServerKeys; fetcher?: Fetch; feedbackMailer?: FeedbackMailer }
 interface Authenticated { request: SignedRequest; clientId: string; replyKey: CryptoKey; recipientId: string }
 const wireSchema = z.strictObject({ envelope: z.string().min(100).max(100_000) });
 
-export async function buildApp({ config, store, keys, fetcher }: Options) {
+export async function buildApp({ config, store, keys, fetcher, feedbackMailer }: Options) {
   const origins = config.ALLOWED_ORIGINS.split(',').map((value) => value.trim()).filter(Boolean);
   const app = Fastify({
     logger: config.NODE_ENV === 'test' ? false : { level: config.LOG_LEVEL },
@@ -25,6 +26,8 @@ export async function buildApp({ config, store, keys, fetcher }: Options) {
     trustProxy: config.TRUST_PROXY ? config.TRUST_PROXY.split(',').map((value) => value.trim()) : false,
   });
   const provider = createProvider({ apiKey: config.SILICONFLOW_API_KEY, baseUrl: config.SILICONFLOW_BASE_URL, model: config.SILICONFLOW_MODEL, timeoutMs: config.UPSTREAM_TIMEOUT_MS, maxTokens: config.MAX_OUTPUT_TOKENS }, fetcher);
+  const mailer = feedbackMailer ?? createFeedbackMailer(config);
+  app.addHook('onClose', async () => { mailer.close(); });
   let inFlight = 0;
   let cryptoInFlight = 0;
 
@@ -119,6 +122,16 @@ export async function buildApp({ config, store, keys, fetcher }: Options) {
   secureRoute('/v1/usage', 200, async (auth) => {
     z.strictObject({}).parse(auth.request.data);
     return { usedCharacters: await store.used(clientDailyKey(auth.clientId)), limitCharacters: config.CLIENT_DAILY_CHARACTERS, resetsAt: dayWindow().expiresAt.toISOString() };
+  });
+  secureRoute('/v1/feedback', 201, async (auth, request) => {
+    const data = feedbackSchema.parse(auth.request.data);
+    await store.consumeBuckets(feedbackBuckets(config, auth.clientId, hashIp(request.ip, keys.ipHashSecret)));
+    try { await mailer.send(data); }
+    catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(502, 'FEEDBACK_SEND_FAILED', '反馈发送失败，请稍后重试');
+    }
+    return { accepted: true };
   });
   secureRoute('/v1/translate', 200, async (auth, request) => {
     const data = translationSchema.parse(auth.request.data);

@@ -1,7 +1,7 @@
 import { calculateJwkThumbprint, importJWK } from 'jose';
 import { z } from 'zod';
 import { createIdentity, publicKeys, open, responseSchema, seal, serverKeysSchema, type Identity, type ServerPublicKeys } from '../src/protocol.js';
-import { translationSchema, translationResultSchema, usageSchema } from '../src/contracts.js';
+import { feedbackSchema, feedbackResultSchema, translationSchema, translationResultSchema, usageSchema, type FeedbackInput } from '../src/contracts.js';
 
 export interface ClientState { identity: Identity; clientId?: string }
 export interface ClientOptions {
@@ -81,6 +81,9 @@ export class TranslationClient {
     return result;
   }
   async usage(options: RequestOptions = {}) { return usageSchema.parse(await this.request('/v1/usage', {}, false, options)); }
+  async submitFeedback(input: FeedbackInput, options: RequestOptions = {}) {
+    return feedbackResultSchema.parse(await this.request('/v1/feedback', feedbackSchema.parse(input), false, options));
+  }
 }
 
 export { createIdentity } from '../src/protocol.js';

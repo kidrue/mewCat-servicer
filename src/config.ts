@@ -21,6 +21,13 @@ const schema = z.object({
   REGISTRATIONS_PER_IP_PER_DAY: positive(10), INGRESS_REQUESTS_PER_MINUTE: positive(120),
   ALLOWED_ORIGINS: z.string().transform((value) => value || defaultAllowedOrigins).default(defaultAllowedOrigins), TRUST_PROXY: z.string().default(''),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'silent']).default('info'),
+  SMTP_HOST: z.string().trim().default(''), SMTP_PORT: positive(587, 65535),
+  SMTP_SECURE: z.enum(['true', 'false']).default('false').transform(value => value === 'true'),
+  SMTP_USER: z.string().trim().default(''), SMTP_PASS: z.string().default(''),
+  SMTP_FROM: z.union([z.email(), z.literal('')]).default(''),
+  FEEDBACK_TO: z.email().default('kidrue.me@gmail.com'),
+  FEEDBACK_CLIENT_REQUESTS_PER_HOUR: positive(3), FEEDBACK_IP_REQUESTS_PER_HOUR: positive(10),
+  FEEDBACK_GLOBAL_REQUESTS_PER_DAY: positive(200),
 });
 export type Config = z.infer<typeof schema>;
 export function loadConfig(environment: Record<string, string | undefined> = process.env): Config {

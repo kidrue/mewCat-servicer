@@ -55,6 +55,7 @@ console.log(usage);
 | `POST` | `/v1/clients/register` | 是 | `201` | 注册客户端设备身份 |
 | `POST` | `/v1/translate` | 是 | `200` | 批量翻译文本 |
 | `POST` | `/v1/usage` | 是 | `200` | 查询当前客户端当日字符用量 |
+| `POST` | `/v1/feedback` | 是 | `201` | 通过服务器 SMTP 发送意见反馈 |
 
 服务只接受以上路径。POST 路径不接受查询参数。
 
@@ -72,7 +73,7 @@ Content-Type: application/json
 
 ### POST 外层请求
 
-三个 POST 接口的 HTTP 请求体格式完全相同：
+所有 POST 接口的 HTTP 请求体格式完全相同：
 
 ```json
 {
