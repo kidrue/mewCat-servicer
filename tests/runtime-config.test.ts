@@ -54,7 +54,7 @@ describe('生产运行时配置更新', () => {
 
   it('为 Compose 转义密码中的引号、变量标记和尾反斜杠', async () => {
     const password = "quoted'\"${VALUE}\\";
-    const { envPath, runtimePath } = await fixture('', translationConfig + smtpConfig.replace('test#password$literal', password));
+    const { envPath, runtimePath } = await fixture('', translationConfig + smtpConfig.replace('test#password$literal', () => password));
 
     expect(runUpdater(envPath, runtimePath).status).toBe(0);
     expect(await readFile(envPath, 'utf8')).toContain("SMTP_PASS=\"quoted'\\\"$${VALUE}\\\\\"\n");
@@ -67,7 +67,7 @@ describe('生产运行时配置更新', () => {
     "quoted'\"${VALUE}\\",
     String.raw`backslash\'quote`,
   ])('经真实 Compose 解析后密码保持原值：%#', async password => {
-    const { envPath, runtimePath } = await fixture('', translationConfig + smtpConfig.replace('test#password$literal', password));
+    const { envPath, runtimePath } = await fixture('', translationConfig + smtpConfig.replace('test#password$literal', () => password));
     expect(runUpdater(envPath, runtimePath).status).toBe(0);
     const composePath = join(envPath, '..', 'compose.yaml');
     await writeFile(composePath, 'services:\n  probe:\n    image: busybox\n    env_file: .env\n', 'utf8');
