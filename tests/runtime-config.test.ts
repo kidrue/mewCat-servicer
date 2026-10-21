@@ -63,6 +63,7 @@ describe('生产运行时配置更新', () => {
   const composeAvailable = spawnSync('docker', ['compose', 'version'], { encoding: 'utf8' }).status === 0;
   it.skipIf(!composeAvailable).each([
     'test#password$literal',
+    'literal$$pair',
     "quoted'\"${VALUE}\\",
     String.raw`backslash\'quote`,
   ])('经真实 Compose 解析后密码保持原值：%#', async password => {
@@ -73,7 +74,9 @@ describe('生产运行时配置更新', () => {
     const parsed = spawnSync('docker', ['compose', '--env-file', envPath, '-f', composePath, 'config', '--format', 'json'], { encoding: 'utf8' });
 
     expect(parsed.status).toBe(0);
-    expect(JSON.parse(parsed.stdout).services.probe.environment.SMTP_PASS).toBe(password);
+    // compose config 会在渲染结果中再次将 $ 写成 $$；还原这一层展示转义。
+    const rendered = JSON.parse(parsed.stdout).services.probe.environment.SMTP_PASS as string;
+    expect(rendered.replaceAll('$$', () => '$')).toBe(password);
   });
 
   it('未传入 SMTP 配置时保留服务器已有的发信配置', async () => {
