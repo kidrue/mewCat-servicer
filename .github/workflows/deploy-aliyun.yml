@@ -37,6 +37,7 @@ jobs:
         run: |
           bash -n deploy/deploy.sh
           bash -n deploy/cleanup-images.sh
+          docker compose version
           npx --yes npm@11 ci
           npm run typecheck
           npm test
@@ -76,6 +77,13 @@ jobs:
           SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
           SILICONFLOW_BASE_URL: ${{ vars.SILICONFLOW_BASE_URL || 'https://api.siliconflow.cn/v1' }}
           SILICONFLOW_MODEL: ${{ vars.SILICONFLOW_MODEL || 'deepseek-ai/DeepSeek-V4-Flash' }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          FEEDBACK_TO: ${{ secrets.FEEDBACK_TO }}
         run: |
           test -n "$SILICONFLOW_API_KEY"
           [[ "$SILICONFLOW_API_KEY" != *$'\n'* && "$SILICONFLOW_API_KEY" != *$'\r'* ]]
@@ -83,6 +91,15 @@ jobs:
           [[ "$SILICONFLOW_BASE_URL" =~ ^https://[^[:space:]]+$ ]]
           [[ "$SILICONFLOW_MODEL" =~ ^[a-zA-Z0-9._/-]+$ ]]
           test -n "$ALLOWED_ORIGINS"
+          if [[ -n "$SMTP_HOST$SMTP_PORT$SMTP_SECURE$SMTP_USER$SMTP_PASS$SMTP_FROM$FEEDBACK_TO" ]]; then
+            for key in SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASS SMTP_FROM FEEDBACK_TO; do
+              value="${!key}"
+              if [[ -z "$value" || "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+                echo "SMTP 配置缺失或包含换行：$key" >&2
+                exit 1
+              fi
+            done
+          fi
           remote="$DEPLOY_USER@$DEPLOY_HOST"
           incoming="/tmp/mewcat-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           ssh_opts=(-p "$DEPLOY_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
@@ -105,6 +122,11 @@ jobs:
             printf 'SILICONFLOW_BASE_URL=%s\n' "$SILICONFLOW_BASE_URL"
             printf 'SILICONFLOW_MODEL=%s\n' "$SILICONFLOW_MODEL"
             printf 'ALLOWED_ORIGINS=%s\n' "$ALLOWED_ORIGINS"
+            if [[ -n "$SMTP_HOST" ]]; then
+              for key in SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASS SMTP_FROM FEEDBACK_TO; do
+                printf '%s=%s\n' "$key" "${!key}"
+              done
+            fi
           } | ssh "${ssh_opts[@]}" "$remote" "umask 077; cat > '$incoming/runtime.env'"
           ssh "${ssh_opts[@]}" "$remote" "bash '$incoming/deploy.sh' '$DEPLOY_PATH' '$COMPOSE_PROJECT' '$GITHUB_SHA' '$incoming'"
       - name: 清理 Runner SSH 私钥

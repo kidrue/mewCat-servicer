@@ -24,6 +24,8 @@ SMTP 接受固定收件人后，返回 HTTP 201，解密结果为 `{ "ok": true,
 
 在服务器 `.env` 中配置 `SMTP_HOST`、`SMTP_USER`、`SMTP_PASS` 和 `SMTP_FROM`。`SMTP_FROM` 是 SMTP 服务商允许使用的发信邮箱。`FEEDBACK_TO` 默认是 `kidrue.me@gmail.com`，只由服务器设置，HTTP 请求无法覆盖。
 
+自动部署时，`SMTP_HOST`、`SMTP_PORT`、`SMTP_SECURE`、`SMTP_USER`、`SMTP_PASS`、`SMTP_FROM`、`FEEDBACK_TO` 统一保存在 GitHub 的 `production` Environment Secrets，部署时安全同步到服务器 `.env`。修改 Secrets 后需重新部署；本机 `.env.local` 不提交到代码仓库。
+
 端口 587 默认使用 STARTTLS；端口 465 自动启用隐式 TLS。可显式设置 `SMTP_SECURE=true`。所有连接均要求 TLS，并校验证书。连接、问候及读写超时分别为 10 秒。SMTP 凭据未完整配置时，不建立 SMTP 连接，仅反馈接口不可用，原有翻译服务仍正常启动。
 
 通用 SMTP 的发信账号可以与收件邮箱不同。如果服务商使用授权码或应用专用密码，应将它配置为 `SMTP_PASS`，不提交到 Git，也不要写入扩展构建变量。现有 Compose 通过 `env_file: .env` 加载这些配置，无需修改容器权限。

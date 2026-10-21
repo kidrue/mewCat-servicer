@@ -58,6 +58,8 @@ ssh-keygen -lf aliyun_known_hosts
 | `ALIYUN_SSH_PRIVATE_KEY` | 上一步生成的完整私钥，包含 BEGIN/END 行 |
 | `ALIYUN_SSH_KNOWN_HOSTS` | 经核验的 known_hosts 行 |
 | `SILICONFLOW_API_KEY` | 生产翻译供应商 API Key；必须放在 `production` Environment Secret，不使用 Variable |
+| `SMTP_HOST`、`SMTP_PORT`、`SMTP_SECURE` | 反馈邮件服务器、端口及隐式 TLS 开关，例如 Gmail 使用 `smtp.gmail.com`、`587`、`false` |
+| `SMTP_USER`、`SMTP_PASS`、`SMTP_FROM`、`FEEDBACK_TO` | 反馈发信账号、应用专用密码、发件地址及固定收件地址；七项 SMTP 配置需一并保存在 `production` Environment Secrets |
 
 可选 Variables：
 
@@ -72,7 +74,7 @@ ssh-keygen -lf aliyun_known_hosts
 
 接口访问白名单统一维护在仓库 [`config/allowed-origins.json`](../config/allowed-origins.json)，每项填写完整的 `chrome-extension://扩展ID`。构建会拒绝空列表及非法来源，并将配置打包进产物和镜像；构建后通过 `dist/scripts/export-allowed-origins.js` 导出到 `GITHUB_ENV`，部署时写入服务器 `.env` 的 `ALLOWED_ORIGINS`，覆盖旧值。后续仅需修改这个 JSON 文件并推送 `main`，无需在 GitHub Variables 或服务器重复维护列表。
 
-服务器身份密钥继续只保存在服务器上。供应商 API Key 由 `production` Environment Secret 管理：工作流仅在部署步骤读取它，通过 SSH stdin 写入权限为 `0600` 的远端临时文件，不进入 Docker build 参数、镜像、发布压缩包或命令参数。部署脚本先备份旧 `.env`，再原子更新三项供应商配置和来源白名单；Secret 缺失或配置非法时会在停止旧 API 前失败。成功部署后删除临时文件。将本次工作流及脚本提交并推送到 `main` 后，在 Actions 查看运行结果。
+服务器身份密钥继续只保存在服务器上。供应商 API Key 和 SMTP 配置由 `production` Environment Secrets 管理：工作流仅在部署步骤读取它们，通过 SSH stdin 写入权限为 `0600` 的远端临时文件，不进入 Docker build 参数、镜像、发布压缩包或命令参数。部署脚本先备份旧 `.env`，再原子更新供应商、来源白名单及 SMTP 配置；配置非法时会在停止旧 API 前失败。SMTP 七项要么全部提供，要么全部留空；全部留空时保留服务器原有 SMTP 配置。成功部署后删除临时文件。`.env.local` 仅作本机配置来源，不提交到 Git。更新 GitHub Secrets 后需重新运行部署，运行中的容器才会加载新值。
 
 ## 4. 发布后管理
 
