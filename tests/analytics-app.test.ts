@@ -1,7 +1,7 @@
 import { TranslationClient } from "../client/browser.js"
 import { createIdentity, publicKeys } from "../src/protocol.js"
 import type { FastifyInstance } from "fastify"
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { AnalyticsStore } from "../src/analytics/store.js"
 import { buildApp } from "../src/app.js"
@@ -52,6 +52,7 @@ describe("调用画像 HTTP 接入", () => {
         })
     })
     afterEach(async () => {
+        vi.restoreAllMocks()
         await app?.close()
         await fixture?.cleanup()
     })
@@ -143,6 +144,16 @@ describe("调用画像 HTTP 接入", () => {
             status: "ok",
             analyticsPersistenceFailures: 1
         })
+    })
+    it("分钟限流经过加密响应保留正确错误码，且不消耗剩余日额度", async () => {
+        vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-04T01:00:00Z"))
+        const sdk = await client()
+        await sdk.translate({ texts: ["hello"], targetLanguage: "zh-CN" })
+        const bucket = await fixture.store.db.usageBucket.findFirstOrThrow({ where: { key: { startsWith: `client:${sdk.getState().clientId}:minute:` } } })
+        await fixture.store.db.usageBucket.update({ where: { key: bucket.key }, data: { used: 20 } })
+        await expect(sdk.translate({ texts: ["hello"], targetLanguage: "zh-CN" })).rejects.toMatchObject({ status: 429, code: "RATE_LIMITED" })
+        expect(await sdk.usage()).toMatchObject({ usedCharacters: 5, limitCharacters: 20 })
+        expect(await fixture.store.db.apiCall.findFirst({ where: { statusCode: 429 } })).toMatchObject({ errorCode: "RATE_LIMITED" })
     })
     it("供应商失败仍保存原文并可分析，执行状态与错误正确", async () => {
         const sdk = await client()

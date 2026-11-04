@@ -10,7 +10,7 @@ describe('额度来源边界', () => {
     expect(hashIp('192.0.2.1', 'other-salt')).not.toBe(hashIp('192.0.2.1', 'salt'));
   });
   it('UTC 日边界刷新每日额度，不能改客户端 ID 绕过全站额度', () => {
-    const config = loadConfig({ SILICONFLOW_API_KEY: 'test', SILICONFLOW_MODEL: 'test' });
+    const config = loadConfig({ SILICONFLOW_API_KEY: 'test', SILICONFLOW_MODEL: 'test', GLOBAL_DAILY_CHARACTERS: '1000000', GLOBAL_DAILY_REQUESTS: '10000' });
     const before = translationBuckets(config, 'a', 'same-ip', 10, Date.parse('2026-09-20T23:59:59Z'));
     const sameWindow = translationBuckets(config, 'b', 'other-ip', 10, Date.parse('2026-09-20T23:59:59Z'));
     const after = translationBuckets(config, 'a', 'same-ip', 10, Date.parse('2026-09-21T00:00:00Z'));

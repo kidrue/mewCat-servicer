@@ -34,7 +34,7 @@ describe('浏览器兼容客户端', () => {
     const state = structuredClone(client.getState());
     expect(state.identity.encryption.privateKey.extractable).toBe(false);
     const restored = await TranslationClient.connect({ baseUrl: 'http://localhost:3000', fetcher, state });
-    expect(await restored.usage()).toMatchObject({ usedCharacters: 5, limitCharacters: 20_000 });
+    expect(await restored.usage()).toMatchObject({ usedCharacters: 5, limitCharacters: 500_000 });
     await fixture.store.revokeClient(state.clientId!);
     await expect(restored.translate({ texts: ['hello'], targetLanguage: 'zh-CN' })).rejects.toMatchObject({ code: 'CLIENT_REVOKED' });
   });
