@@ -15,6 +15,7 @@ import Fastify, { LogController, type FastifyRequest } from "fastify"
 import { importJWK } from "jose"
 import { z, ZodError } from "zod"
 
+import { AdminAnalytics } from "./analytics/admin.js"
 import { AnalyticsStore, type CallInput } from "./analytics/store.js"
 import type { Config } from "./config.js"
 import { ApiError, publicError } from "./errors.js"
@@ -78,6 +79,7 @@ export async function buildApp({
         fetcher
     )
     const analytics = new AnalyticsStore(store, config)
+    const adminAnalytics = new AdminAnalytics(analytics)
     const contexts = new WeakMap<FastifyRequest, CallInput>()
     const knownRoutes = new Set([
         "/health",
@@ -171,6 +173,14 @@ export async function buildApp({
                   : publicError(error)
         const context = contexts.get(request)
         if (context) context.errorCode = safe.code
+        if (
+            request.routeOptions.url === "/v1/analytics/query" &&
+            safe.status < 500
+        )
+            request.log.warn(
+                { requestId: request.id, code: safe.code },
+                "analytics request rejected"
+            )
         if (safe.status >= 500)
             request.log.error(
                 { requestId: request.id, code: safe.code },
@@ -290,7 +300,8 @@ export async function buildApp({
             const context = contexts.get(request)!
             if (auth.clientId !== "registration") {
                 context.clientId = auth.clientId
-                context.epoch = await analytics.epoch(auth.clientId)
+                if (path !== "/v1/analytics/query")
+                    context.epoch = await analytics.epoch(auth.clientId)
             }
             let body: unknown
             let responseStatus = status
@@ -311,6 +322,11 @@ export async function buildApp({
                         : publicError(error)
                 responseStatus = safe.status
                 context.errorCode = safe.code
+                if (path === "/v1/analytics/query" && safe.status < 500)
+                    request.log.warn(
+                        { requestId: request.id, code: safe.code },
+                        "analytics operation rejected"
+                    )
                 body = {
                     ok: false,
                     error: { code: safe.code, message: safe.message }
@@ -338,6 +354,23 @@ export async function buildApp({
             return reply.code(responseStatus).send({ envelope })
         })
     }
+    secureRoute("/v1/analytics/query", 200, async (auth, request) => {
+        const controller = new AbortController()
+        const abort = () => controller.abort()
+        request.raw.once("aborted", abort)
+        request.raw.socket.once("close", abort)
+        if (request.raw.aborted || request.raw.socket.destroyed) abort()
+        try {
+            return await adminAnalytics.query(
+                auth.clientId,
+                auth.request.data,
+                controller.signal
+            )
+        } finally {
+            request.raw.off("aborted", abort)
+            request.raw.socket.off("close", abort)
+        }
+    })
     secureRoute("/v1/clients/register", 201, async (auth, request) => {
         const data = registrationSchema.parse(auth.request.data)
         const window = dayWindow()
