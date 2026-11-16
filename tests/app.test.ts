@@ -14,6 +14,7 @@ describe('真实加密 HTTP 链路', () => {
   let fixture: Awaited<ReturnType<typeof testStore>>;
   let app: FastifyInstance;
   let calls: number;
+  let upstreamInput: unknown;
   const config = loadConfig({ NODE_ENV: 'test', SILICONFLOW_API_KEY: 'test-key', SILICONFLOW_MODEL: 'test-model', CLIENT_DAILY_CHARACTERS: '20', ALLOWED_ORIGINS: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' });
   beforeAll(async () => {
     serverIdentity = await createIdentity();
@@ -24,7 +25,8 @@ describe('真实加密 HTTP 链路', () => {
   beforeEach(async () => {
     fixture = await testStore();
     calls = 0;
-    app = await buildApp({ config, store: fixture.store, keys: { identity: serverIdentity, publicKeys: publicServer, ipHashSecret: 'test-ip-secret' }, fetcher: async () => {
+    app = await buildApp({ config, store: fixture.store, keys: { identity: serverIdentity, publicKeys: publicServer, ipHashSecret: 'test-ip-secret' }, fetcher: async (_url, init) => {
+      upstreamInput = JSON.parse(JSON.parse(String(init?.body)).messages[1].content);
       calls++;
       return Response.json({ choices: [{ message: { content: '{"translations":["你好"]}' }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 2 } });
     } });
@@ -43,6 +45,26 @@ describe('真实加密 HTTP 链路', () => {
     return payload.data.clientId;
   }
   const translate = { texts: ['hello'], sourceLanguage: 'auto', targetLanguage: 'zh-CN' };
+
+  it('接受新版扩展的加密上下文请求，并将参考字符计入用量', async () => {
+    const clientId = await register();
+    const data = { ...translate, texts: ['bank'], context: 'Finance' };
+    const message = await wire(clientId, '/v1/translate', data);
+    const response = await app.inject({ method: 'POST', url: '/v1/translate', payload: { envelope: message.envelope } });
+    expect(response.statusCode).toBe(200);
+    expect(await open(response.json().envelope as string, clientIdentity.encryption.privateKey, serverIdentity.signing.publicKey, 'server', clientId)).toMatchObject({ ok: true, data: { translations: ['你好'] } });
+    expect(upstreamInput).toMatchObject(data);
+    const usage = await wire(clientId, '/v1/usage', {});
+    const usageResponse = await app.inject({ method: 'POST', url: '/v1/usage', payload: { envelope: usage.envelope } });
+    expect(await open(usageResponse.json().envelope as string, clientIdentity.encryption.privateKey, serverIdentity.signing.publicKey, 'server', clientId)).toMatchObject({ data: { usedCharacters: 11 } });
+  });
+
+  it.each([' ', 'x'.repeat(2001)])('拒绝空白或超长上下文且不调用供应商', async (context) => {
+    const clientId = await register();
+    const { envelope } = await wire(clientId, '/v1/translate', { ...translate, context });
+    expect((await app.inject({ method: 'POST', url: '/v1/translate', payload: { envelope } })).statusCode).toBe(400);
+    expect(calls).toBe(0);
+  });
 
   it('注册不接受已废弃的邀请码字段', async () => {
     const { envelope } = await wire('registration', '/v1/clients/register', {

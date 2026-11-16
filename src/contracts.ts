@@ -6,6 +6,7 @@ export const translationSchema = z.strictObject({
   texts: z.array(z.string().min(1).max(5000).refine((value) => value.trim().length > 0)).min(1).max(20),
   sourceLanguage: z.union([z.literal('auto'), language]).default('auto'),
   targetLanguage: language.refine((value) => value.toLowerCase() !== 'auto'),
+  context: z.string().trim().min(1).max(2000).optional(),
 }).refine((data) => data.texts.reduce((total, text) => total + text.length, 0) <= 5000, 'Total text length exceeds 5000');
 export type TranslationInput = z.infer<typeof translationSchema>;
 export const registrationSchema = z.strictObject({

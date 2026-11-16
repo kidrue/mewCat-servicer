@@ -145,6 +145,16 @@ jobs:
             fi
           } | ssh "${ssh_opts[@]}" "$remote" "umask 077; cat > '$incoming/runtime.env'"
           ssh "${ssh_opts[@]}" "$remote" "bash '$incoming/deploy.sh' '$DEPLOY_PATH' '$COMPOSE_PROJECT' '$GITHUB_SHA' '$incoming'"
+          # 检查运行中的容器，避免仅完成构建却仍由旧协议提供服务。
+          ssh "${ssh_opts[@]}" "$remote" "cd '$DEPLOY_PATH' && MEWCAT_IMAGE_TAG='$GITHUB_SHA' docker compose --project-directory '$DEPLOY_PATH' -p '$COMPOSE_PROJECT' -f .deploy/current/compose.yaml -f .deploy/current/compose.images.yaml exec -T api node --input-type=module" <<'NODE'
+          import { translationSchema } from './dist/src/contracts.js';
+          const input = { texts: ['bank'], targetLanguage: 'zh-CN' };
+          translationSchema.parse(input);
+          translationSchema.parse({ ...input, context: 'Finance' });
+          const health = await fetch('http://127.0.0.1:3000/health');
+          if (!health.ok || (await health.json()).status !== 'ok') throw new Error('生产健康检查失败');
+          console.log('生产新旧翻译协议与 context 校验通过，未调用上游模型');
+          NODE
       - name: 清理 Runner SSH 私钥
         if: always()
         run: rm -f ~/.ssh/id_ed25519
