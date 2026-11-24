@@ -1,7 +1,7 @@
 import { calculateJwkThumbprint, importJWK } from 'jose';
 import { z } from 'zod';
 import { createIdentity, publicKeys, open, responseSchema, seal, serverKeysSchema, type Identity, type ServerPublicKeys } from '../src/protocol.js';
-import { feedbackSchema, feedbackResultSchema, translationSchema, translationResultSchema, usageSchema, type FeedbackInput } from '../src/contracts.js';
+import { CHAT_COMPLETIONS_PATH, chatCompletionInputSchema, chatCompletionResultSchema, type ChatCompletionInput, feedbackSchema, feedbackResultSchema, translationSchema, translationResultSchema, usageSchema, type FeedbackInput } from '../src/contracts.js';
 
 export interface ClientState { identity: Identity; clientId?: string }
 export interface ClientOptions {
@@ -74,7 +74,16 @@ export class TranslationClient {
     this.state.clientId = result.clientId;
     return result.clientId;
   }
-  async translate(input: { texts: string[]; targetLanguage: string; sourceLanguage?: string }, options: RequestOptions = {}) {
+    async chatCompletions(
+        input: ChatCompletionInput,
+        options: RequestOptions = {}
+    ) {
+        const data = chatCompletionInputSchema.parse(input)
+        return chatCompletionResultSchema.parse(
+            await this.request(CHAT_COMPLETIONS_PATH, data, false, options)
+        )
+    }
+  async translate(input: z.input<typeof translationSchema>, options: RequestOptions = {}) {
     const data = translationSchema.parse(input);
     const result = translationResultSchema.parse(await this.request('/v1/translate', data, false, options));
     if (result.translations.length !== data.texts.length) throw new Error('服务器响应译文数量不正确');

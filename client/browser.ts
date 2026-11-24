@@ -1,6 +1,10 @@
 import {
     analyticsQuerySchema,
     analyticsResultSchema,
+    CHAT_COMPLETIONS_PATH,
+    chatCompletionInputSchema,
+    chatCompletionResultSchema,
+    type ChatCompletionInput,
     createIdentity,
     feedbackResultSchema,
     feedbackSchema,
@@ -208,6 +212,15 @@ export class TranslationClient {
         )
         this.state.clientId = result.clientId
         return result.clientId
+    }
+    async chatCompletions(
+        input: ChatCompletionInput,
+        options: RequestOptions = {}
+    ) {
+        const data = chatCompletionInputSchema.parse(input)
+        return chatCompletionResultSchema.parse(
+            await this.request(CHAT_COMPLETIONS_PATH, data, false, options)
+        )
     }
     async translate(
         input: {
